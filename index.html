@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDD: Robust Feature Detector and Descriptor using Deformable Transformer</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .text-holder {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .abstract p {
+            font-size: 1.2rem;
+            line-height: 1.8;
+        }
+        .author-list {
+            margin: 20px 0;
+        }
+        .section {
+            margin: 40px 0;
+        }
+        .title-section {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 40px 0;
+            margin-bottom: 40px;
+            width: 100%;
+        }
+        .teaser-image {
+            max-width: 60%;
+            margin: 0 auto;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="title-section">
+        <div class="container px-4">
+            <div class="row">
+                <div class="col-lg-12 text-center">
+                    <h1 class="display-4">RDD: Robust Feature Detector and Descriptor using Deformable Transformer</h1>
+                    <h3 class="text-muted mb-4">CVPR 2025</h3>
+                    <div class="author-list">
+                        <h5>
+                            <a href="https://xtcpete.com">Gonglin Chen</a><sup>1,2</sup>,
+                            <a href="https://twfu.me/">Tianwen Fu</a><sup>1,2</sup>,
+                            <a href="https://scholar.google.com/citations?user=LVWRssoAAAAJ&hl=en">Haiwei Chen</a><sup>1,2</sup>,
+                            <a href="https://scholar.google.com/citations?user=HKXO9CEAAAAJ&hl=en">Wenbin Teng</a><sup>1,2</sup>,
+                            <a href="https://corneliushsiao.github.io/index.html">Hanyuan Xiao</a><sup>1,2</sup>,
+                            <a href="https://ict.usc.edu/about-us/leadership/research-leadership/yajie-zhao/">Yajie Zhao</a><sup>1,2</sup>
+                        </h5>
+                        <div class="mt-2">
+                            <p class="mb-1"><sup>1</sup>Institute for Creative Technologies &nbsp;&nbsp;&nbsp; <sup>2</sup>University of Southern California &nbsp;&nbsp;&nbsp;
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <a href="./assets/paper.pdf" class="btn btn-dark mx-2" target="_blank">
+                            <i class="fas fa-file-pdf me-2"></i>Paper
+                        </a>
+                        <a href="./assets/supp.pdf" class="btn btn-dark mx-2" target="_blank">
+                            <i class="fas fa-file-alt me-2"></i>Supplementary
+                        </a>
+                        <a href="#" class="btn btn-dark mx-2">
+                            <i class="fab fa-github me-2"></i>Code (Coming Soon)
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container px-4">
+        <!-- Rest of the content -->
+        <div class="row">
+            <div class="col-lg-10 offset-lg-1">
+                <div class="section">
+                    <div class="row">
+                        <div class="col-md-12 text-center">
+                            <img src="./assets/teaser.png" class="img-fluid teaser-image" alt="Paper teaser">
+                        </div>
+                        <p class="mt-3">
+                            <strong>Figure 1. </strong> Our proposed method effectively performs both sparse and dense feature matching, referred to as RDD and RDD*, respectively, as shown in the top section. RDD demonstrates its ability to extract accurate keypoints and robust descriptors, enabling reliable matching even under significant scale and viewpoint variations, as illustrated in the bottom section.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Abstract -->
+                <div class="section" id="abstract">
+                    <h2>Abstract</h2>
+                    <div class="text-holder">
+                        <p>
+                            As a core step in structure-from-motion and SLAM, robust feature detection and description under challenging scenarios such as significant viewpoint changes remain unresolved despite their ubiquity. While recent works have identified the importance of local features in modeling geometric transformations, these methods fail to learn the visual cues present in long-range relationships. We present <strong>Robust Deformable Detector</strong> (RDD), a novel and robust keypoint detector/descriptor leveraging the deformable transformer, which captures global context and geometric invariance through deformable self-attention mechanisms. Specifically, we observed that deformable attention focuses on key locations, effectively reducing the search space complexity and modeling the geometric invariance. Furthermore, we collected an Air-to-Ground dataset for training in addition to standard MegaDepth dataset. Our proposed method outperforms all state-of-the-art keypoint detection/description methods in feature matching tasks and is also capable of semi-dense matching. To ensure comprehensive evaluation, we introduce two challenging benchmarks: one emphasizing large viewpoint and scale variations, and the other being an Air-to-Ground benchmark — an evaluation setting that has recently gained popularity for 3D reconstruction across different altitudes.
+
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div class="section" id="results">
+                    <h2>Results</h2>
+                    <div class="row">
+                        <h4>
+                            Relative Pose Estimation
+                        </h4>
+                        <div class="col-md-12 text-center">
+                            <img src="./assets/qualitative.png" class="img-fluid" alt="Result 1">
+                        </div>
+                        <p class="text-center mt-3"><strong>Figure 2. </strong>Qualitative Results on Three Benchmarks. RDD* and RDD are qualitatively compared to DeDoDe-V2-G, ALIKED, and XFeat*. RDD and RDD* are more robust compared DeDoDe-V2-G and ALIKED under challenging scenarios like large scale and viewpoint changes. The red color indicates epipolar error beyond 1 × 10<sup>−4</sup> (in the normalized image coordinates)</p>
+                    
+                    </div>
+
+                    <div class="row">
+                        <h5>
+                            Megadepth
+                        </h5>
+                        <div class="col-md-12 text-center">
+                            <img src="./assets/table1.png" class="img-fluid" alt="Result 2">
+                            <p class="text-center"><strong>Table 1. </strong>SotA comparison on the MegaDepth. Results are measured in AUC (higher is better). Best in bold, second best underlined. Top 4,096 features used for all sparse matching methods.</p>
+                        </div>
+                        
+                    </div>
+                    <div class="row">
+                        <h5>
+                            Air-to-Ground
+                        </h5>
+                        <div class="col-md-7 text-center">
+                            <img src="./assets/table2.png" class="img-fluid" alt="Result 1">
+                            <p class="mt-3"><strong>Table 2. </strong>SotA comparison on Air-to-Ground benchmark. Keypoints and descriptors are matched using dual-softmax
+                                MNN. Measured in AUC (higher is better). Best in bold, second best underlined.</p>
+                        </div>
+                        <div class="col-md-5 text-center">
+                            <img src="./assets/table3.png" class="img-fluid" alt="Result 1">
+                            <p class="mt-3"><strong>Table 3. </strong>More results on Air-to-Ground benchmark.
+                                Results are measured in AUC (higher is better). Best in bold, sec-
+                                ond best underlined.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Method -->
+                <div class="section" id="method">
+                    <h2>Method</h2>
+                    <div class="row">
+                        <div class="col-md-12 text-center">
+                            <img src="./assets/architecture.png" class="img-fluid" alt="Result 1">
+                        </div>
+                        <p>
+                            <strong>An overview of our network architecture.</strong> Descriptor Branch <span style="font-family: monospace;">𝔽<sub>D</sub></span> and Keypoint Branch <span style="font-family: monospace;">𝔽<sub>K</sub></span> process an input image <span style="font-family: monospace;">I ∈ ℝ<sup>H × W × 3</sup></span> independently. <strong>Descriptor Branch:</strong> 4 layers of multiscale feature maps 
+                            <span style="font-family: monospace;">{𝘹<sub>res</sub><sup>l</sup>}<sub>l=1</sub><sup>L</sup></span> are extracted by passing <span style="font-family: monospace;">I</span> through a variant of ResNet 
+                            <span style="font-family: monospace;">𝔽<sub>res</sub></span>. An additional feature map is added by applying a simple CNN on the last feature map, and then they are fed to a transformer encoder 
+                            <span style="font-family: monospace;">𝔽<sub>e</sub></span> with encoded positional embeddings. We up-sample all feature maps output by 
+                            <span style="font-family: monospace;">𝔽<sub>e</sub></span> to size <span style="font-family: monospace;">H/s × W/s</span> where <span style="font-family: monospace;">s = 4</span> is the patch size. Feature maps are then summed together to generate the dense descriptor map 
+                            <span style="font-family: monospace;">D</span>. A CNN head <span style="font-family: monospace;">𝔽<sub>m</sub></span> is applied to the descriptor map to estimate a matchability map <span style="font-family: monospace;">M</span>.
+                            <strong>Keypoint Branch:</strong> <span style="font-family: monospace;">I</span> passes through a simplified variant of ResNet 
+                            <span style="font-family: monospace;">𝔽<sub>cnn</sub></span> to capture multi-scale features 
+                            <span style="font-family: monospace;">{𝘹<sub>cnn</sub><sup>l</sup>}<sub>l=1</sub><sup>L</sup></span>. Features are then up-sampled to size 
+                            <span style="font-family: monospace;">H × W</span> and concatenated to generate a feature map of 
+                            <span style="font-family: monospace;">H × W × 64</span>. A score map <span style="font-family: monospace;">S</span> is estimated by a CNN head 
+                            <span style="font-family: monospace;">𝔽<sub>s</sub></span>. Final sub-pixel keypoints are detected using DKD 
+                        </p>
+                    </div>
+                    
+                </div>
+
+                <div class="section" id="dataset">
+                    <h2>Datasets</h2>
+                    <div class="row">
+                        <p>
+                            We introduce one training dataset Air-to-Ground and two new benchmarks to evaluate the performance of our proposed method. The first benchmark is designed to evaluate the performance of keypoint detectors and descriptors under large viewpoint and scale variations. The second benchmark is an Air-to-Ground benchmark, which is designed to evaluate the performance of keypoint detectors and descriptors under different altitudes. We also use the MegaDepth dataset for evaluation.
+                        </p>
+                        <div class="col-md-12 text-center">
+                            <img src="./assets/examples.png" class="img-fluid" alt="Result 1">
+                            <p class="mt-3"><strong>Figure 3. </strong>
+                                Example Pairs from MegaDepth-View and Air-to-Ground Dataset. The top section shows example pairs
+                                from the MegaDepth-View benchmark dataset, which emphasizes
+                                large viewpoint shifts and scale differences. The bottom sec-
+                                tion presents example pairs from the Air-to-Ground dataset, designed for the novel task of matching aerial images with
+                                ground images.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section" id="bibtex">
+                    <h2>Citation</h2>
+                    <div class="text-holder">
+                        <pre class="p-3 bg-light" style="border-radius: 5px; overflow-x: auto;"><code></code></pre>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Acknowledgments</h2>
+                    <div class="text-holder">
+                        <p>
+                            Supported by the Intelligence Advanced Research Projects Activity (IARPA) via Department of Interior/ Interior Business Center (DOI/IBC) contract number 140D0423C0075. The U.S. Government is authorized to reproduce and distribute reprints for Governmental purposes notwithstanding any copyright annotation thereon. Disclaimer: The views and conclusions contained herein are those of the authors and should not be interpreted as necessarily
+                            representing the official policies or endorsements, either expressed or implied, of IARPA, DOI/IBC, or the U.S. Government. We would like to thank Yayue Chen for her help with visualization.
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+</body>
+</html>
