@@ -86,7 +86,6 @@
                                 <strong>Figure 1. </strong> Our proposed method effectively performs both sparse and dense feature matching, referred to as RDD and RDD*, respectively, as shown in the top section. RDD demonstrates its ability to extract accurate keypoints and robust descriptors, enabling reliable matching even under significant scale and viewpoint variations, as illustrated in the bottom section.
                             </p>
                         </div>
-                        
                     </div>
                 </div>
 
@@ -104,41 +103,29 @@
                 <div class="section" id="results">
                     <h2>Results</h2>
                     <div class="row">
-                        <h4>
-                            Relative Pose Estimation
-                        </h4>
+                        <h4>Relative Pose Estimation</h4>
                         <div class="col-md-12 text-left">
                             <img src="./assets/qualitative.png" class="img-fluid" alt="Result 1">
                             <p class="mt-3"><strong>Figure 2. </strong>Qualitative Results on Three Benchmarks. RDD* and RDD are qualitatively compared to DeDoDe-V2-G, ALIKED, and XFeat*. RDD and RDD* are more robust compared DeDoDe-V2-G and ALIKED under challenging scenarios like large scale and viewpoint changes. The red color indicates epipolar error beyond 1 × 10<sup>−4</sup> (in the normalized image coordinates)</p>
-                    
                         </div>
-                        
                     </div>
 
                     <div class="row">
-                        <h5>
-                            Megadepth
-                        </h5>
+                        <h5>Megadepth</h5>
                         <div class="col-md-12 text-left">
                             <img src="./assets/table1.png" class="img-fluid" alt="Result 2">
                             <p class="mt-3"><strong>Table 1. </strong>SotA comparison on the MegaDepth. Results are measured in AUC (higher is better). Best in bold, second best underlined. Top 4,096 features used for all sparse matching methods.</p>
                         </div>
-                        
                     </div>
                     <div class="row">
-                        <h5>
-                            Air-to-Ground
-                        </h5>
+                        <h5>Air-to-Ground</h5>
                         <div class="col-md-7 text-left">
                             <img src="./assets/table2.png" class="img-fluid" alt="Result 1">
-                            <p class="mt-3"><strong>Table 2. </strong>SotA comparison on Air-to-Ground benchmark. Keypoints and descriptors are matched using dual-softmax
-                                MNN. Measured in AUC (higher is better). Best in bold, second best underlined.</p>
+                            <p class="mt-3"><strong>Table 2. </strong>SotA comparison on Air-to-Ground benchmark. Keypoints and descriptors are matched using dual-softmax MNN. Measured in AUC (higher is better). Best in bold, second best underlined.</p>
                         </div>
                         <div class="col-md-5 text-left">
                             <img src="./assets/table3.png" class="img-fluid" alt="Result 1">
-                            <p class="mt-3"><strong>Table 3. </strong>More results on Air-to-Ground benchmark.
-                                Results are measured in AUC (higher is better). Best in bold, sec-
-                                ond best underlined.</p>
+                            <p class="mt-3"><strong>Table 3. </strong>More results on Air-to-Ground benchmark. Results are measured in AUC (higher is better). Best in bold, second best underlined.</p>
                         </div>
                     </div>
                 </div>
@@ -150,23 +137,11 @@
                         <div class="col-md-12 text-left">
                             <img src="./assets/architecture.png" class="img-fluid" alt="Result 1">
                             <p class="mt-3">
-                                <strong>An overview of our network architecture.</strong> Descriptor Branch <span style="font-family: monospace;">𝔽<sub>D</sub></span> and Keypoint Branch <span style="font-family: monospace;">𝔽<sub>K</sub></span> process an input image <span style="font-family: monospace;">I ∈ ℝ<sup>H × W × 3</sup></span> independently. <strong>Descriptor Branch:</strong> 4 layers of multiscale feature maps 
-                                <span style="font-family: monospace;">{𝘹<sub>res</sub><sup>l</sup>}<sub>l=1</sub><sup>L</sup></span> are extracted by passing <span style="font-family: monospace;">I</span> through a variant of ResNet 
-                                <span style="font-family: monospace;">𝔽<sub>res</sub></span>. An additional feature map is added by applying a simple CNN on the last feature map, and then they are fed to a transformer encoder 
-                                <span style="font-family: monospace;">𝔽<sub>e</sub></span> with encoded positional embeddings. We up-sample all feature maps output by 
-                                <span style="font-family: monospace;">𝔽<sub>e</sub></span> to size <span style="font-family: monospace;">H/s × W/s</span> where <span style="font-family: monospace;">s = 4</span> is the patch size. Feature maps are then summed together to generate the dense descriptor map 
-                                <span style="font-family: monospace;">D</span>. A CNN head <span style="font-family: monospace;">𝔽<sub>m</sub></span> is applied to the descriptor map to estimate a matchability map <span style="font-family: monospace;">M</span>.
-                                <strong>Keypoint Branch:</strong> <span style="font-family: monospace;">I</span> passes through a simplified variant of ResNet 
-                                <span style="font-family: monospace;">𝔽<sub>cnn</sub></span> to capture multi-scale features 
-                                <span style="font-family: monospace;">{𝘹<sub>cnn</sub><sup>l</sup>}<sub>l=1</sub><sup>L</sup></span>. Features are then up-sampled to size 
-                                <span style="font-family: monospace;">H × W</span> and concatenated to generate a feature map of 
-                                <span style="font-family: monospace;">H × W × 64</span>. A score map <span style="font-family: monospace;">S</span> is estimated by a CNN head 
-                                <span style="font-family: monospace;">𝔽<sub>s</sub></span>. Final sub-pixel keypoints are detected using DKD 
+                                <strong>An overview of our network architecture.</strong> Descriptor Branch <span style="font-family: monospace;">𝔽<sub>D</sub></span> and Keypoint Branch <span style="font-family: monospace;">𝔽<sub>K</sub></span> process an input image <span style="font-family: monospace;">I ∈ ℝ<sup>H × W × 3</sup></span> independently. <strong>Descriptor Branch:</strong> 4 layers of multiscale feature maps <span style="font-family: monospace;">{𝘹<sub>res</sub><sup>l</sup>}<sub>l=1</sub><sup>L</sup></span> are extracted by passing <span style="font-family: monospace;">I</span> through a variant of ResNet <span style="font-family: monospace;">𝔽<sub>res</sub></span>. An additional feature map is added by applying a simple CNN on the last feature map, and then they are fed to a transformer encoder <span style="font-family: monospace;">𝔽<sub>e</sub></span> with encoded positional embeddings. We up-sample all feature maps output by <span style="font-family: monospace;">𝔽<sub>e</sub></span> to size <span style="font-family: monospace;">H/s × W/s</span> where <span style="font-family: monospace;">s = 4</span> is the patch size. Feature maps are then summed together to generate the dense descriptor map <span style="font-family: monospace;">D</span>. A CNN head <span style="font-family: monospace;">𝔽<sub>m</sub></span> is applied to the descriptor map to estimate a matchability map <span style="font-family: monospace;">M</span>.
+                                <strong>Keypoint Branch:</strong> <span style="font-family: monospace;">I</span> passes through a simplified variant of ResNet <span style="font-family: monospace;">𝔽<sub>cnn</sub></span> to capture multi-scale features <span style="font-family: monospace;">{𝘹<sub>cnn</sub><sup>l</sup>}<sub>l=1</sub><sup>L</sup></span>. Features are then up-sampled to size <span style="font-family: monospace;">H × W</span> and concatenated to generate a feature map of <span style="font-family: monospace;">H × W × 64</span>. A score map <span style="font-family: monospace;">S</span> is estimated by a CNN head <span style="font-family: monospace;">𝔽<sub>s</sub></span>. Final sub-pixel keypoints are detected using DKD
                             </p>
                         </div>
-                    
                     </div>
-                    
                 </div>
 
                 <div class="section" id="dataset">
@@ -178,14 +153,9 @@
                         <div class="col-md-12 text-left">
                             <img src="./assets/examples.png" class="img-fluid" alt="Result 1">
                             <p class="mt-3"><strong>Figure 3. </strong>
-                                Example Pairs from MegaDepth-View and Air-to-Ground. The top section shows example pairs
-                                from the MegaDepth-View benchmark, which emphasizes
-                                large viewpoint shifts and scale differences. The bottom sec-
-                                tion presents example pairs from the Air-to-Ground dataset/benchmark, designed for the novel task of matching aerial images with
-                                ground images.
+                                Example Pairs from MegaDepth-View and Air-to-Ground. The top section shows example pairs from the MegaDepth-View benchmark, which emphasizes large viewpoint shifts and scale differences. The bottom section presents example pairs from the Air-to-Ground dataset/benchmark, designed for the novel task of matching aerial images with ground images.
                             </p>
                         </div>
-                        
                     </div>
                 </div>
 
@@ -200,16 +170,13 @@
                     <h2>Acknowledgments</h2>
                     <div class="text-holder">
                         <p>
-                            Supported by the Intelligence Advanced Research Projects Activity (IARPA) via Department of Interior/ Interior Business Center (DOI/IBC) contract number 140D0423C0075. The U.S. Government is authorized to reproduce and distribute reprints for Governmental purposes notwithstanding any copyright annotation thereon. Disclaimer: The views and conclusions contained herein are those of the authors and should not be interpreted as necessarily
-                            representing the official policies or endorsements, either expressed or implied, of IARPA, DOI/IBC, or the U.S. Government. We would like to thank Yayue Chen for her help with visualization.
+                            Supported by the Intelligence Advanced Research Projects Activity (IARPA) via Department of Interior/ Interior Business Center (DOI/IBC) contract number 140D0423C0075. The U.S. Government is authorized to reproduce and distribute reprints for Governmental purposes notwithstanding any copyright annotation thereon. Disclaimer: The views and conclusions contained herein are those of the authors and should not be interpreted as necessarily representing the official policies or endorsements, either expressed or implied, of IARPA, DOI/IBC, or the U.S. Government. We would like to thank Yayue Chen for her help with visualization.
                         </p>
                     </div>
                 </div>
 
             </div>
         </div>
-    </div>
-    
     </div>
 
     <!-- Bootstrap JS and dependencies -->
