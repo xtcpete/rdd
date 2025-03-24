@@ -59,13 +59,13 @@
                         </div>
                     </div>
                     <div class="mt-4">
-                        <a href="./assets/paper.pdf" class="btn btn-dark mx-2" target="_blank">
+                        <a href="./assets/paper.pdf" class="btn btn-dark mx-2 mt-3" target="_blank">
                             <i class="fas fa-file-pdf me-2"></i>Paper
                         </a>
-                        <a href="./assets/supp.pdf" class="btn btn-dark mx-2" target="_blank">
+                        <a href="./assets/supp.pdf" class="btn btn-dark mx-2 mt-3" target="_blank">
                             <i class="fas fa-file-alt me-2"></i>Supplementary
                         </a>
-                        <a href="https://github.com/xtcpete/rdd" class="btn btn-dark mx-2">
+                        <a href="https://github.com/xtcpete/rdd" class="btn btn-dark mx-2 mt-3">
                             <i class="fab fa-github me-2"></i>Code
                         </a>
                     </div>
@@ -137,7 +137,7 @@
                         <div class="col-md-12 text-left">
                             <img src="./assets/architecture.png" class="img-fluid" alt="Result 1">
                             <p class="mt-3">
-                                <strong>An overview of our network architecture.</strong> Descriptor Branch <span style="font-family: monospace;">𝔽<sub>D</sub></span> and Keypoint Branch <span style="font-family: monospace;">𝔽<sub>K</sub></span> process an input image <span style="font-family: monospace;">I ∈ ℝ<sup>H × W × 3</sup></span> independently. <strong>Descriptor Branch:</strong> 4 layers of multiscale feature maps <span style="font-family: monospace;">{𝘹<sub>res</sub><sup>l</sup>}<sub>l=1</sub><sup>L</sup></span> are extracted by passing <span style="font-family: monospace;">I</span> through a variant of ResNet <span style="font-family: monospace;">𝔽<sub>res</sub></span>. An additional feature map is added by applying a simple CNN on the last feature map, and then they are fed to a transformer encoder <span style="font-family: monospace;">𝔽<sub>e</sub></span> with encoded positional embeddings. We up-sample all feature maps output by <span style="font-family: monospace;">𝔽<sub>e</sub></span> to size <span style="font-family: monospace;">H/s × W/s</span> where <span style="font-family: monospace;">s = 4</span> is the patch size. Feature maps are then summed together to generate the dense descriptor map <span style="font-family: monospace;">D</span>. A CNN head <span style="font-family: monospace;">𝔽<sub>m</sub></span> is applied to the descriptor map to estimate a matchability map <span style="font-family: monospace;">M</span>.
+                                <strong>An overview of our network architecture.</strong> Descriptor Branch <span style="font-family: monospace;">𝔽<sub>D</sub></span> and Keypoint Branch <span style="font-family: monospace;">𝔽<sub>K</sub></span> process an input image <span style="font-family: monospace;">I ∈ ℝ<sup>H × W × 3</sup></span> independently. <strong>Descriptor Branch:</strong> 4 layers of multiscale feature maps <span style="font-family: monospace;">{𝘹<sub>res</sub><sup>l</sup>}<sub>l=1</sub><sup>L</sup></span> are extracted by passing <span style="font-family: monospace;">I</span> through a variant of ResNet <span style="font-family: monospace;">𝔽<sub>res</sub></span>. An additional feature map is added by applying a simple CNN on the last feature map, and then they are fed to a transformer encoder <span style="font-family: monospace;">𝔽<sub>e</sub></span> with positional embeddings. We up-sample all feature maps output by <span style="font-family: monospace;">𝔽<sub>e</sub></span> to size <span style="font-family: monospace;">H/s × W/s</span> where <span style="font-family: monospace;">s = 4</span> is the patch size. Feature maps are then summed together to generate the dense descriptor map <span style="font-family: monospace;">D</span>. A CNN head <span style="font-family: monospace;">𝔽<sub>m</sub></span> is applied to the descriptor map to estimate a matchability map <span style="font-family: monospace;">M</span>.
                                 <strong>Keypoint Branch:</strong> <span style="font-family: monospace;">I</span> passes through a simplified variant of ResNet <span style="font-family: monospace;">𝔽<sub>cnn</sub></span> to capture multi-scale features <span style="font-family: monospace;">{𝘹<sub>cnn</sub><sup>l</sup>}<sub>l=1</sub><sup>L</sup></span>. Features are then up-sampled to size <span style="font-family: monospace;">H × W</span> and concatenated to generate a feature map of <span style="font-family: monospace;">H × W × 64</span>. A score map <span style="font-family: monospace;">S</span> is estimated by a CNN head <span style="font-family: monospace;">𝔽<sub>s</sub></span>. Final sub-pixel keypoints are detected using DKD
                             </p>
                         </div>
@@ -162,7 +162,12 @@
                 <div class="section" id="bibtex">
                     <h2>Citation</h2>
                     <div class="row">
-                        <pre class="p-3 bg-light" style="border-radius: 5px; overflow-x: auto;"><code></code></pre>
+                        <pre class="p-3 bg-light" style="border-radius: 5px; overflow-x: auto;"><code>@inproceedings{gonglin2025rdd,
+    title     = {RDD: Robust Feature Detector and Descriptor using Deformable Transformer},
+    author    = {Chen, Gonglin and Fu, Tianwen and Chen, Haiwei and Teng, Wenbin and Xiao, Hanyuan and Zhao, Yajie},
+    booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    year      = {2025}
+}</code></pre>
                     </div>
                 </div>
 
