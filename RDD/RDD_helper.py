@@ -126,13 +126,19 @@ class RDD_helper(nn.Module):
         
     @torch.inference_mode()
     def match_3rd_party(self, img0, img1, model='aliked', resize=None):
-        img0 = self.parse_input(img0, resize=resize)
-        img1 = self.parse_input(img1, resize=resize)
+        img0, scale0 = self.parse_input(img0, resize=resize)
+        img1, scale1 = self.parse_input(img1, resize=resize)
 
         out0 = self.RDD.extract_3rd_party(img0, model=model)[0]
         out1 = self.RDD.extract_3rd_party(img1, model=model)[0]
         
         mkpts0, mkpts1, conf = self.matcher(out0, out1, 0.01)
+        
+        scale0 = 1.0 / scale0
+        scale1 = 1.0 / scale1
+        
+        mkpts0 = mkpts0 * scale0
+        mkpts1 = mkpts1 * scale1
         
         return mkpts0.cpu().numpy(), mkpts1.cpu().numpy(), conf.cpu().numpy()
     
