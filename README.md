@@ -105,6 +105,15 @@ python ./benchmarks/air_ground.py --method lightglue
 I am working on cleaning up the code and dataset. Stay tuned!
 
 ## Citation
+```
+@inproceedings{gonglin2025rdd,
+    title     = {RDD: Robust Feature Detector and Descriptor using Deformable Transformer},
+    author    = {Chen, Gonglin and Fu, Tianwen and Chen, Haiwei and Teng, Wenbin and Xiao, Hanyuan and Zhao, Yajie},
+    booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    year      = {2025}
+}
+```
+
 
 ## License
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
