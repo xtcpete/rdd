@@ -221,7 +221,7 @@ def parse_arguments():
     
     parser.add_argument("--data_root", type=str, default="./data/air_ground", help="Path to the Air-to-Ground test dataset.")
 
-    parser.add_argument("--weights", type=str, default="./weights/RDD.pth", help="Path to the model checkpoint.")
+    parser.add_argument("--weights", type=str, default="./weights/RDD-v2.pth", help="Path to the model checkpoint.")
 
     parser.add_argument("--plot", action="store_true", help="Whether to plot the results.")
 
@@ -236,7 +236,7 @@ if __name__ == "__main__":
         os.mkdir('outputs')
     if not os.path.exists(f'outputs/air_ground'):
         os.mkdir(f'outputs/air_ground')
-    model = build()
+    model = build(weights=args.weights)
     benchmark = AirGroundPoseMNNBenchmark(data_root=args.data_root)
     model.eval()
     model_helper = RDD_helper(model)

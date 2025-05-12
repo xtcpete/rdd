@@ -237,9 +237,11 @@ class RDD(nn.Module):
         x1_n = torch.stack((x1_n[2], x1_n[1]), dim=-1).reshape(B, H * W, 2)
         return x1_n
 
-def build(config=None):
+def build(config=None, weights=None):
     if config is None:
         config = read_config('./configs/default.yaml')
+    if weights is not None:
+        config['weights'] = weights
     device = torch.device(config['device'])
     print('config', config)
     detector = build_detector(config)

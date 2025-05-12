@@ -157,7 +157,7 @@ class MegaDepthPoseMNNBenchmark:
                     elif method == 'sparse':
                         kpts0, kpts1, conf = model_helper.match(im_A, im_B, thr=0.01, resize=1600)
                     else:
-                        raise ValueError(f"Invalid method {method}")
+                        kpts0, kpts1, conf = model_helper.match_3rd_party(im_A, im_B, thr=0.01, resize=1600, model=method)
 
                     im_A = Image.open(im_A_path)
                     w0, h0 = im_A.size
@@ -228,7 +228,7 @@ def parse_arguments():
     
     parser.add_argument("--data_root", type=str, default="./data/megadepth_test_1500", help="Path to the MegaDepth dataset.")
 
-    parser.add_argument("--weights", type=str, default="./weights/RDD.pth", help="Path to the model checkpoint.")
+    parser.add_argument("--weights", type=str, default="./weights/RDD-v2.pth", help="Path to the model checkpoint.")
 
     parser.add_argument("--plot", action="store_true", help="Whether to plot the results.")
 
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     if not os.path.exists(f'outputs/mega_1500'):
         os.mkdir(f'outputs/mega_1500')
         
-    model = build()
+    model = build(weights=args.weights)
     benchmark = MegaDepthPoseMNNBenchmark(data_root=args.data_root)
     model.eval()
     model_helper = RDD_helper(model)

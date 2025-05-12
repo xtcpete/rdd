@@ -370,7 +370,7 @@ class LightGlue(nn.Module):
             "add_scale_ori": True,
         },
         "rdd": {
-            "weights": './weights/RDD_lg.pth',
+            "weights": './weights/RDD_lg-v2.pth',
             "input_dim": 256,
         },
     }

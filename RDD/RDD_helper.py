@@ -10,20 +10,8 @@ class RDD_helper(nn.Module):
         super().__init__()
         self.matcher = DualSoftmaxMatcher(inv_temperature = 20, thr = 0.01)
         self.dense_matcher = DenseMatcher(inv_temperature=20, thr=0.01)
-        lg_conf = {
-            "name": "lightglue",  # just for interfacing
-            "input_dim": 256,  # input descriptor dimension (autoselected from weights)
-            "descriptor_dim": 256,
-            "add_scale_ori": False,
-            "n_layers": 9,
-            "num_heads": 4,
-            "flash": True,  # enable FlashAttention if available.
-            "mp": False,  # enable mixed precision
-            "filter_threshold": 0.01,  # match threshold
-            "weights": None,
-        }
-        self.lg_matcher = LightGlue(features='rdd', conf=lg_conf).to(RDD.device)
         self.RDD = RDD
+        self.lg_matcher = None
         
     @torch.inference_mode()
     def match(self, img0, img1, thr=0.01, resize=None, top_k=4096):
@@ -50,7 +38,23 @@ class RDD_helper(nn.Module):
     
     @torch.inference_mode()
     def match_lg(self, img0, img1, thr=0.01, resize=None, top_k=4096):
-        
+        if self.lg_matcher is None:
+            lg_conf = {
+                "name": "lightglue",  # just for interfacing
+                "input_dim": 256,  # input descriptor dimension (autoselected from weights)
+                "descriptor_dim": 256,
+                "add_scale_ori": False,
+                "n_layers": 9,
+                "num_heads": 4,
+                "flash": True,  # enable FlashAttention if available.
+                "mp": False,  # enable mixed precision
+                "filter_threshold": 0.01,  # match threshold
+                "depth_confidence": -1,  # depth confidence threshold
+                "width_confidence": -1,  # width confidence threshold
+                "weights": './weights/RDD_lg-v2.pth',  # path to the weights
+            }
+            self.lg_matcher = LightGlue(features='rdd', conf=lg_conf).to(self.RDD.device)
+            
         if top_k is not None and top_k != self.RDD.top_k:
             self.RDD.top_k = top_k
             self.RDD.set_softdetect(top_k=top_k)
@@ -125,14 +129,14 @@ class RDD_helper(nn.Module):
         return mkpts0.cpu().numpy(), mkpts1.cpu().numpy(), conf.cpu().numpy()
         
     @torch.inference_mode()
-    def match_3rd_party(self, img0, img1, model='aliked', resize=None):
+    def match_3rd_party(self, img0, img1, model='aliked', resize=None, thr=0.01):
         img0, scale0 = self.parse_input(img0, resize=resize)
         img1, scale1 = self.parse_input(img1, resize=resize)
 
         out0 = self.RDD.extract_3rd_party(img0, model=model)[0]
         out1 = self.RDD.extract_3rd_party(img1, model=model)[0]
         
-        mkpts0, mkpts1, conf = self.matcher(out0, out1, 0.01)
+        mkpts0, mkpts1, conf = self.matcher(out0, out1, thr)
         
         scale0 = 1.0 / scale0
         scale1 = 1.0 / scale1

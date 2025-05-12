@@ -222,7 +222,7 @@ def parse_arguments():
     
     parser.add_argument("--data_root", type=str, default="./data/megadepth_view", help="Path to the MegaDepth dataset.")
 
-    parser.add_argument("--weights", type=str, default="./weights/RDD.pth", help="Path to the model checkpoint.")
+    parser.add_argument("--weights", type=str, default="./weights/RDD-v2.pth", help="Path to the model checkpoint.")
 
     parser.add_argument("--plot", action="store_true", help="Whether to plot the results.")
 
@@ -237,7 +237,7 @@ if __name__ == "__main__":
     
     if not os.path.exists(f'outputs/mega_view'):
         os.mkdir(f'outputs/mega_view')
-    model = build()
+    model = build(weights=args.weights)
     benchmark = MegaDepthPoseMNNBenchmark(data_root=args.data_root)
     model.eval()
     model_helper = RDD_helper(model)

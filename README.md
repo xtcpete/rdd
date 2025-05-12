@@ -4,14 +4,60 @@
 [Project Page](https://xtcpete.github.io/rdd/) 
 
 ## Table of Contents
+- [Updates](#updates)
 - [Installation](#installation)
 - [Usage](#usage)
   - [Inference](#inference)
   - [Evaluation](#evaluation)
-  - [Training](#training) - Coming soon
+  - [Training](#training)
 - [Citation](#citation)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
+
+## Updates
+
+- Training code and new weights released.
+
+- We have updated the training code compared to what was described in the paper. In the original setup, the RDD was trained on the MegaDepth and Air-to-Ground datasets by resizing all images to the training resolution. In this release, we retrained RDD on MegaDepth only, using a combination of resizing and cropping, a strategy used by [ALIKE](https://github.com/Shiaoming/ALIKE). This change significantly improves robustness.
+
+<table>
+  <tr>
+    <th></th>
+    <th colspan="3">MegaDepth-1500</th>
+    <th colspan="3">MegaDepth-View</th>
+    <th colspan="3">Air-to-Ground</th>
+  </tr>
+  <tr>
+    <td></td>
+    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
+    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
+    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
+  </tr>
+  <tr>
+    <td>RDD-v2</td>
+    <td>52.4</td><td>68.5</td><td>80.1</td>
+    <td>52.0</td><td>67.1</td><td>78.2</td>
+    <td>45.8</td><td>58.6</td><td>71.0</td>
+  </tr>
+  <tr>
+    <td>RDD-v1</td>
+    <td>48.2</td><td>65.2</td><td>78.3</td>
+    <td>38.3</td><td>53.1</td><td>65.6</td>
+    <td>41.4</td><td>56.0</td><td>67.8</td>
+  </tr>
+  <tr>
+    <td>RDD-v2+LG</td>
+    <td>53.3</td><td>69.8</td><td>82.0</td>
+    <td>59.0</td><td>74.2</td><td>84.0</td>
+    <td>54.8</td><td>69.0</td><td>79.1</td>
+  </tr>
+  <tr>
+    <td>RDD-v1+LG</td>
+    <td>52.3</td><td>68.9</td><td>81.8</td>
+    <td>54.2</td><td>69.3</td><td>80.3</td>
+    <td>55.1</td><td>68.9</td><td>78.9</td>
+  </tr>
+</table>
 
 ## Installation
 
@@ -20,18 +66,18 @@ git clone --recursive https://github.com/xtcpete/rdd
 cd RDD
 
 # Create conda env
-conda create -n rdd python=3.8 pip
+conda create -n rdd python=3.10 pip
 conda activate rdd
 
 # Install CUDA 
 conda install -c nvidia/label/cuda-11.8.0 cuda-toolkit
 # Install torch
-pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu118
 # Install all dependencies
 pip install -r requirements.txt
 # Compile custom operations
 cd ./RDD/models/ops
-sh make.sh
+pip install -e .
 ```
 
 We provide the [download link](https://drive.google.com/drive/folders/1QgVaqm4iTUCqbWb7_Fi6mX09EHTId0oA?usp=sharing) to:
@@ -59,7 +105,9 @@ output = RDD_model.extract(torch.randn(1, 3, 480, 640))
 
 ### Evaluation
 
-Please note that due to the different GPU architectures and the stochastic nature of RANSAC, you may observe slightly different results; however, they should be very close to those reported in the paper.
+Please note that due to the different GPU architectures and the stochastic nature of RANSAC, you may observe slightly different results; however, they should be very close to those reported in the paper. To reproduce the number in paper, use v1 weights instead.
+
+Results can be visualized by passing argument --plot
 
 **MegaDepth-1500**
 
@@ -102,7 +150,27 @@ python ./benchmarks/air_ground.py --method lightglue
 
 ### Training
 
-I am working on cleaning up the code and dataset. Stay tuned!
+1. Download MegaDepth dataset using [download.sh](./data/megadepth/download.sh) and megadepth_indices from [LoFTR](https://github.com/zju3dv/LoFTR/blob/master/docs/TRAINING.md#download-datasets). Then the MegaDepth root folder should look like the following:
+```bash
+./data/megadepth/megadepth_indices # indices
+./data/megadepth/depth_undistorted # depth maps
+./data/megadepth/Undistorted_SfM # images and poses
+./data/megadepth/scene_info # indices for training LightGlue
+```
+2. Then you can train RDD in two steps; Descriptor first
+```bash
+# distributed training with 8 gpus
+python -m training.train --ckpt_save_path ./ckpt_descriptor --distributed --batch_size 32
+
+# single gpu 
+python -m training.train --ckpt_save_path ./ckpt_descriptor
+```
+and then Detector
+```bash
+python -m training.train --ckpt_save_path ./ckpt_detector --weights ./ckpt_descriptor/RDD_best.pth --train_detector --training_res 480
+```
+
+I am working on recollecting the Air-to-Ground dataset because of licensing issues.
 
 ## Citation
 ```

@@ -16,5 +16,4 @@ nhead: 8
 num_encoder_layers: 4
 num_feature_levels: 5
 top_k: 4096
-train_detector: True
-weights: ./weights/RDD.pth
+train_detector: False
