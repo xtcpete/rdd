@@ -1,1 +1,6 @@
-__pycache__/
+.venv
+/build/
+**.egg-info
+**.pyc
+/.idea/
+**/__pycache__/
