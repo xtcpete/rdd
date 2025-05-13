@@ -1,7 +1,7 @@
 import math
 import torch
 from torch import nn
-from RDD.utils.misc import NestedTensor
+from ..utils.misc import NestedTensor
 
 class PositionEmbeddingSine(nn.Module):
     """

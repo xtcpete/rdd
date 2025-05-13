@@ -23,7 +23,7 @@ from typing import Dict, List
 import torch.distributed as dist
 from .position_encoding import build_position_encoding
 
-from RDD.utils.misc import NestedTensor, is_main_process
+from ..utils.misc import NestedTensor, is_main_process
 
 class FrozenBatchNorm2d(torch.nn.Module):
     """

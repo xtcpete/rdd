@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet
 from typing import Optional, Callable
-from RDD.utils.misc import NestedTensor
+from ..utils.misc import NestedTensor
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels,

@@ -18,7 +18,7 @@ import torch.nn.functional as F
 from torch import nn, Tensor
 from torch.nn.init import xavier_uniform_, constant_, uniform_, normal_
 
-from RDD.utils.misc import inverse_sigmoid
+from ..utils.misc import inverse_sigmoid
 from .ops.modules import MSDeformAttn
 
 class MLP(nn.Module):

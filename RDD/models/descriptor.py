@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from RDD.utils.misc import NestedTensor, nested_tensor_from_tensor_list
+from ..utils.misc import NestedTensor, nested_tensor_from_tensor_list
 import torchvision.transforms as transforms
 from .backbone import build_backbone
 from .deformable_transformer import build_deforamble_transformer
