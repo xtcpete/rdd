@@ -4,3 +4,5 @@
 **.pyc
 /.idea/
 **/__pycache__/
+weights/
+outputs

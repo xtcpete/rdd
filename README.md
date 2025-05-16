@@ -16,6 +16,8 @@
 
 ## Updates
 
+- SfM reconstruction through [COLMAP](https://github.com/colmap/colmap.git) added. we provide a ready-to-use [notebook](./demo_sfm.ipynb) for a simple example. Code adopted from [hloc](https://github.com/cvg/Hierarchical-Localization.git).
+
 - Training code and new weights released.
 
 - We have updated the training code compared to what was described in the paper. In the original setup, the RDD was trained on the MegaDepth and Air-to-Ground datasets by resizing all images to the training resolution. In this release, we retrained RDD on MegaDepth only, using a combination of resizing and cropping, a strategy used by [ALIKE](https://github.com/Shiaoming/ALIKE). This change significantly improves robustness.
@@ -91,7 +93,7 @@ Create and unzip downloaded test data to the `data` folder.
 Create and add weights to the `weights` folder and you are ready to go.
 
 ## Usage
-For your convenience, we provide a ready-to-use [notebook](./Demo.ipynb) for some examples.
+For your convenience, we provide a ready-to-use [notebook](./demo_matching.ipynb) for some examples.
 
 ### Inference
 

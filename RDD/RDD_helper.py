@@ -1,4 +1,4 @@
-from RDD.matchers import DualSoftmaxMatcher, DenseMatcher, LightGlue
+from .matchers import DualSoftmaxMatcher, DenseMatcher, LightGlue
 import torch
 import torch.nn as nn
 import numpy as np

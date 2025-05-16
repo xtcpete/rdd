@@ -5,3 +5,4 @@ tqdm
 kornia
 matplotlib
 pyyaml
+git+https://github.com/cvg/Hierarchical-Localization.git
