@@ -16,7 +16,7 @@
 
 ## Updates
 
-- SfM reconstruction through [COLMAP](https://github.com/colmap/colmap.git) added. we provide a ready-to-use [notebook](./demo_sfm.ipynb) for a simple example. Code adopted from [hloc](https://github.com/cvg/Hierarchical-Localization.git).
+- SfM reconstruction through [COLMAP](https://github.com/colmap/colmap.git) added. We provide a ready-to-use [notebook](./demo_sfm.ipynb) for a simple example. Code adopted from [hloc](https://github.com/cvg/Hierarchical-Localization.git).
 
 - Training code and new weights released.
 
