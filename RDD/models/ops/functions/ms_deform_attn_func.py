@@ -26,7 +26,7 @@ except ModuleNotFoundError as e:
         "\t`cd mask2former/modeling/pixel_decoder/ops`\n"
         "\t`sh make.sh`\n"
     )
-    raise ModuleNotFoundError(info_string)
+    print(info_string)
 
 
 class MSDeformAttnFunction(Function):

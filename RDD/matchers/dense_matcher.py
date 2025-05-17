@@ -31,7 +31,7 @@ class DenseMatcher(nn.Module):
             mkpts_1_dense = info1['keypoints_dense'][inds_dense[:,1]]
             mconf_dense = P_dense[inds_dense[:,0], inds_dense[:,1]]
             
-            mkpts_0_dense, mkpts_1_dense = self.refine_matches(mkpts_0_dense, mkpts_1_dense, Fm, err_thr=err_thr)
+            mkpts_0_dense, mkpts_1_dense, mconf_dense = self.refine_matches(mkpts_0_dense, mkpts_1_dense, mconf_dense, Fm, err_thr=err_thr)
             mkpts_0 = mkpts_0[inliers]
             mkpts_1 = mkpts_1[inliers]
             mconf = mconf[inliers]
@@ -60,7 +60,7 @@ class DenseMatcher(nn.Module):
         return inds, P
     
     @torch.inference_mode()
-    def refine_matches(self, mkpts_0, mkpts_1, Fm, err_thr=4):    
+    def refine_matches(self, mkpts_0, mkpts_1, mconf, Fm, err_thr=4):    
         mkpts_0_h = torch.cat([mkpts_0, torch.ones(mkpts_0.shape[0], 1, device=mkpts_0.device)], dim=1)  # (N, 3)
         mkpts_1_h = torch.cat([mkpts_1, torch.ones(mkpts_1.shape[0], 1, device=mkpts_1.device)], dim=1)  # (N, 3)
         
@@ -85,4 +85,4 @@ class DenseMatcher(nn.Module):
         
         refined_mkpts_1 = mkpts_1 + torch.stack([x_offset, y_offset], dim=1)
   
-        return mkpts_0, refined_mkpts_1
+        return mkpts_0, refined_mkpts_1, mconf[inds]
