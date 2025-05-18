@@ -65,7 +65,7 @@
 
 ```bash
 git clone --recursive https://github.com/xtcpete/rdd
-cd RDD
+cd rdd
 
 # Create conda env
 conda create -n rdd python=3.10 pip
@@ -77,7 +77,8 @@ conda install -c nvidia/label/cuda-11.8.0 cuda-toolkit
 pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu118
 # Install all dependencies
 pip install -r requirements.txt
-# Compile custom operations
+# Compile custom operations.
+# You don't have to compile them to run RDD, but it is recommended for better performance.
 cd ./RDD/models/ops
 pip install -e .
 ```

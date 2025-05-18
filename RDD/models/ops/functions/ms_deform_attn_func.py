@@ -12,7 +12,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-
+import warnings
 import torch
 import torch.nn.functional as F
 from torch.autograd import Function
@@ -22,11 +22,13 @@ try:
     import MultiScaleDeformableAttention as MSDA
 except ModuleNotFoundError as e:
     info_string = (
-        "\n\nPlease compile MultiScaleDeformableAttention CUDA op with the following commands:\n"
-        "\t`cd mask2former/modeling/pixel_decoder/ops`\n"
-        "\t`sh make.sh`\n"
+        "\nThe MultiScaleDeformableAttention CUDA extension is not compiled. "
+        "Using the slower PyTorch implementation instead.\n"
+        "\tTo compile it, run the following commands:\n"
+        "\tcd RDD/models/ops\n"
+        "\tpip install -e ."
     )
-    print(info_string)
+    warnings.warn(info_string)
 
 
 class MSDeformAttnFunction(Function):

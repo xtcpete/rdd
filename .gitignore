@@ -6,3 +6,5 @@
 **/__pycache__/
 weights/
 outputs
+**/build/
+**.so
