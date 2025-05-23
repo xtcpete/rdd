@@ -177,11 +177,14 @@ I am working on recollecting the Air-to-Ground dataset because of licensing issu
 
 ## Citation
 ```
-@inproceedings{gonglin2025rdd,
-    title     = {RDD: Robust Feature Detector and Descriptor using Deformable Transformer},
-    author    = {Chen, Gonglin and Fu, Tianwen and Chen, Haiwei and Teng, Wenbin and Xiao, Hanyuan and Zhao, Yajie},
-    booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
-    year      = {2025}
+@misc{chen2025rddrobustfeaturedetector,
+      title={RDD: Robust Feature Detector and Descriptor using Deformable Transformer}, 
+      author={Gonglin Chen and Tianwen Fu and Haiwei Chen and Wenbin Teng and Hanyuan Xiao and Yajie Zhao},
+      year={2025},
+      eprint={2505.08013},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2505.08013}, 
 }
 ```
 
