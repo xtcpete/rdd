@@ -3,7 +3,7 @@ import torch
 from kornia.geometry.epipolar import numeric
 from kornia.geometry.conversions import convert_points_to_homogeneous
 import cv2
-
+import bisect
 def pose_auc(errors, thresholds):
     sort_idx = np.argsort(errors)
     errors = np.array(errors.copy())[sort_idx]

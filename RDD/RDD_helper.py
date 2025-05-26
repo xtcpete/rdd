@@ -53,8 +53,8 @@ class RDD_helper(nn.Module):
                 "width_confidence": -1,  # width confidence threshold
                 "weights": './weights/RDD_lg-v2.pth',  # path to the weights
             }
-            self.lg_matcher = LightGlue(features='rdd', conf=lg_conf).to(self.RDD.device)
-            
+            self.lg_matcher = LightGlue('rdd', **lg_conf).to(self.RDD.device)
+
         if top_k is not None and top_k != self.RDD.top_k:
             self.RDD.top_k = top_k
             self.RDD.set_softdetect(top_k=top_k)
@@ -67,14 +67,14 @@ class RDD_helper(nn.Module):
         
         out0 = self.RDD.extract(img0)[0]
         out1 = self.RDD.extract(img1)[0]
-        
+
         # get top_k confident matches
         image0_data = {
             'keypoints': out0['keypoints'][None],
             'descriptors': out0['descriptors'][None],
             'image_size': size0,
         }
-
+        
         image1_data = {
             'keypoints': out1['keypoints'][None],
             'descriptors': out1['descriptors'][None],

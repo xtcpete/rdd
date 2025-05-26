@@ -385,8 +385,7 @@ class LightGlue(nn.Module):
                     f"{{{','.join(self.features)}}}"
                 )
             for k, v in self.features[features].items():
-                if not hasattr(conf, k):
-                    setattr(conf, k, v)
+                setattr(conf, k, v)
 
         if conf.input_dim != conf.descriptor_dim:
             self.input_proj = nn.Linear(conf.input_dim, conf.descriptor_dim, bias=True)
