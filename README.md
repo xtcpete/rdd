@@ -1,4 +1,5 @@
-## RDD: Robust Feature Detector and Descriptor using Deformable Transformer (CVPR 2025)
+## RDD: Robust Feature Detector and Descriptor using Deformable Transformer (CVPR 2025)(IMC 2025 Prize Winner)
+
 [Gonglin Chen](https://xtcpete.com/) · [Tianwen Fu](https://twfu.me/) · [Haiwei Chen](https://scholar.google.com/citations?user=LVWRssoAAAAJ&hl=en) · [Wenbin Teng](https://wbteng9526.github.io/) · [Hanyuan Xiao](https://corneliushsiao.github.io/index.html) · [Yajie Zhao](https://ict.usc.edu/about-us/leadership/research-leadership/yajie-zhao/)
 
 [Project Page](https://xtcpete.github.io/rdd/) 
@@ -16,11 +17,35 @@
 
 ## Updates
 
-- SfM reconstruction through [COLMAP](https://github.com/colmap/colmap.git) added. We provide a ready-to-use [notebook](./demo_sfm.ipynb) for a simple example. Code adopted from [hloc](https://github.com/cvg/Hierarchical-Localization.git).
+[06/06] Evaluation code for ScanNet added. 
+<table>
+  <tr>
+    <th></th>
+    <th colspan="3">ScanNet-1500</th>
+  </tr>
+  <tr>
+    <td></td>
+    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
+  </tr>
+  <tr>
+    <td>RDD-v2</td>
+    <td>13.7</td><td>29.3</td><td>45.3</td>
+  </tr>
+  <tr>
+    <td>RDD-v2+LG</td>
+    <td>20.2</td><td>38.6</td><td>55.8</td>
+  </tr>
+  <tr>
+    <td>eLoFTR</td>
+    <td>19.6</td><td>37.7</td><td>54.4</td>
+  </tr>
+</table>
 
-- Training code and new weights released.
+[05/16] SfM reconstruction through [COLMAP](https://github.com/colmap/colmap.git) added. We provide a ready-to-use [notebook](./demo_sfm.ipynb) for a simple example. Code adopted from [hloc](https://github.com/cvg/Hierarchical-Localization.git).
 
-- We have updated the training code compared to what was described in the paper. In the original setup, the RDD was trained on the MegaDepth and Air-to-Ground datasets by resizing all images to the training resolution. In this release, we retrained RDD on MegaDepth only, using a combination of resizing and cropping, a strategy used by [ALIKE](https://github.com/Shiaoming/ALIKE). This change significantly improves robustness.
+[05/12] Training code and new weights released.
+
+[05/12] We have updated the training code compared to what was described in the paper. In the original setup, the RDD was trained on the MegaDepth and Air-to-Ground datasets by resizing all images to the training resolution. In this release, we retrained RDD on MegaDepth only, using a combination of resizing and cropping, a strategy used by [ALIKE](https://github.com/Shiaoming/ALIKE). This change significantly improves robustness.
 
 <table>
   <tr>
@@ -87,6 +112,7 @@ We provide the [download link](https://drive.google.com/drive/folders/1QgVaqm4iT
   - the MegaDepth-1500 test set
   - the MegaDepth-View test set
   - the Air-to-Ground test set
+  - the SacnNet-1500 test set
   - 2 pretrained models, RDD and LightGlue for matching RDD
 
 Create and unzip downloaded test data to the `data` folder.
@@ -151,6 +177,19 @@ python ./benchmarks/air_ground.py --method dense
 python ./benchmarks/air_ground.py --method lightglue
 ```
 
+**ScanNet-1500**
+
+```bash
+# Sparse matching
+python ./benchmarks/scannet_1500.py
+
+# Dense matching
+python ./benchmarks/scannet_1500.py --method dense
+
+# LightGlue
+python ./benchmarks/scannet_1500.py --method lightglue
+```
+
 ### Training
 
 1. Download MegaDepth dataset using [download.sh](./data/megadepth/download.sh) and megadepth_indices from [LoFTR](https://github.com/zju3dv/LoFTR/blob/master/docs/TRAINING.md#download-datasets). Then the MegaDepth root folder should look like the following:
@@ -177,14 +216,13 @@ I am working on recollecting the Air-to-Ground dataset because of licensing issu
 
 ## Citation
 ```
-@misc{chen2025rddrobustfeaturedetector,
-      title={RDD: Robust Feature Detector and Descriptor using Deformable Transformer}, 
-      author={Gonglin Chen and Tianwen Fu and Haiwei Chen and Wenbin Teng and Hanyuan Xiao and Yajie Zhao},
-      year={2025},
-      eprint={2505.08013},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2505.08013}, 
+@InProceedings{Chen_2025_CVPR,
+    author    = {Chen, Gonglin and Fu, Tianwen and Chen, Haiwei and Teng, Wenbin and Xiao, Hanyuan and Zhao, Yajie},
+    title     = {RDD: Robust Feature Detector and Descriptor using Deformable Transformer},
+    booktitle = {Proceedings of the Computer Vision and Pattern Recognition Conference (CVPR)},
+    month     = {June},
+    year      = {2025},
+    pages     = {6394-6403}
 }
 ```
 

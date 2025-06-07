@@ -68,13 +68,7 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = True
 
 class Trainer():
-    """
-        Class for training XFeat with default params as described in the paper.
-        We use a blend of MegaDepth (labeled) pairs with synthetically warped images (self-supervised).
-        The major bottleneck is to keep loading huge megadepth h5 files from disk, 
-        the network training itself is quite fast.
-    """
-    
+
     def __init__(self, rank, args=None):
         config = read_config(args.config_path)
         
