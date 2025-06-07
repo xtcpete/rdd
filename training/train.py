@@ -325,7 +325,7 @@ class Trainer():
                 # Compute losses
                 loss_ds, loss_h, acc_kp = self.DescriptorLoss(m1, m2, h1, h2, pts1, pts2)
                 
-                loss_items.append(loss_ds.unsqueeze(0))
+                loss_items.append(loss_ds.unsqueeze(0) + loss_h.unsqueeze(0))
 
                 acc_coarse = check_accuracy1(m1, m2)
                 acc_kp_items.append(acc_kp)
