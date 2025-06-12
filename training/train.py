@@ -8,8 +8,7 @@ from RDD.RDD_helper import RDD_helper
 import torch.distributed
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="XFeat training script.")
-
+    parser = argparse.ArgumentParser(description="RDD training script.")
     parser.add_argument('--megadepth_root_path', type=str, default='./data/megadepth',
                         help='Path to the MegaDepth dataset root directory.')
     parser.add_argument('--test_data_root', type=str, default='./data/megadepth_test_1500',
@@ -18,7 +17,6 @@ def parse_arguments():
                         help='Path to save the checkpoints.')
     parser.add_argument('--model_name', type=str, default='RDD',
                         help='Name of the model to save.')
-    parser.add_argument('--air_ground_root_path', type=str, default='./data/air_ground_data_2/AirGround')
     parser.add_argument('--batch_size', type=int, default=4,
                         help='Batch size for training. Default is 4.')
     parser.add_argument('--lr', type=float, default=1e-4,
@@ -51,14 +49,13 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from RDD.RDD import build
-from training.utils import *
-from training.losses import *
 from benchmarks.mega_1500 import MegaDepthPoseMNNBenchmark
 from RDD.dataset.megadepth.megadepth import MegaDepthDataset
 from RDD.dataset.megadepth import megadepth_warper
 from torch.utils.data import Dataset, DataLoader, DistributedSampler, RandomSampler, WeightedRandomSampler
 from training.losses.detector_loss import compute_correspondence, DetectorLoss
 from training.losses.descriptor_loss import DescriptorLoss
+from training.utils import check_accuracy
 import tqdm
 from torch.optim.lr_scheduler import MultiStepLR, StepLR
 from datetime import timedelta
@@ -71,7 +68,6 @@ class Trainer():
 
     def __init__(self, rank, args=None):
         config = read_config(args.config_path)
-        
         config['num_encoder_layers'] = args.num_encoder_layers
         config['enc_n_points'] = args.enc_n_points
         config['num_feature_levels'] = args.num_feature_levels
@@ -128,7 +124,7 @@ class Trainer():
         self.fine_weight = 1.0
         self.dual_softmax_weight = 1.0
         self.heatmaps_weight = 1.0
-        #Setup optimizer 
+        # setup optimizer 
         self.batch_size = batch_size
         self.epochs = args.epochs
         self.opt = optim.AdamW(filter(lambda x: x.requires_grad, self.model.parameters()) , lr = args.lr, weight_decay=1e-4)
@@ -137,7 +133,7 @@ class Trainer():
         if args.train_detector:
             self.DetectorLoss = DetectorLoss(temperature=0.1, scores_th=0.1)
         else:
-            self.DescriptorLoss = DescriptorLoss(inv_temp=20, dual_softmax_weight=1, heatmap_weight=1)
+            self.DescriptorLoss = DescriptorLoss(inv_temp=20)
         
         self.benchmark = MegaDepthPoseMNNBenchmark(data_root=args.test_data_root)
 
@@ -181,7 +177,6 @@ class Trainer():
     
     def create_data_loader(self):
         # Create sampler
-
             
         if not args.train_detector:
             mega_crop = torch.utils.data.ConcatDataset( [MegaDepthDataset(root = self.TRAINVAL_DATA_SOURCE,
@@ -215,7 +210,6 @@ class Trainer():
     def validate(self, total_steps):
             
         with torch.no_grad():
-            
             
             if args.train_detector:
                 method = 'sparse'
@@ -327,7 +321,7 @@ class Trainer():
                 
                 loss_items.append(loss_ds.unsqueeze(0) + loss_h.unsqueeze(0))
 
-                acc_coarse = check_accuracy1(m1, m2)
+                acc_coarse = check_accuracy(m1, m2)
                 acc_kp_items.append(acc_kp)
                 acc_coarse_items.append(acc_coarse)
 

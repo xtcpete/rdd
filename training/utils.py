@@ -177,7 +177,7 @@ def subpix_softmax2d(heatmaps, temp = 0.25):
     return coords
 
 
-def check_accuracy1(X, Y, pts1 = None, pts2 = None):
+def check_accuracy(X, Y, pts1 = None, pts2 = None):
     with torch.no_grad():
         #dist_mat = torch.cdist(X,Y)
         dist_mat = X @ Y.t()
@@ -186,18 +186,6 @@ def check_accuracy1(X, Y, pts1 = None, pts2 = None):
         correct = nn == torch.arange(len(X), device = X.device)
 
         acc = correct.sum().item() / len(X)
-        return acc
-    
-def check_accuracy(X, Y, thr = 0.0):
-    with torch.no_grad():
-        #dist_mat = torch.cdist(X,Y)
-        
-        inds = matcher(X[None], Y[None], thr)
-        batch_inds = inds[:,0]
-
-        # count the number of inds
-        acc = len(batch_inds) / len(X)
-
         return acc
 
 def get_nb_trainable_params(model):

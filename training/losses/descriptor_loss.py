@@ -5,7 +5,7 @@ from training.utils import *
 from torch import nn
 
 class DescriptorLoss(nn.Module):
-    def __init__(self, inv_temp = 20, dual_softmax_weight = 1, heatmap_weight = 1):
+    def __init__(self, inv_temp = 20, dual_softmax_weight = 5, heatmap_weight = 1):
         super().__init__()
         self.inv_temp = inv_temp
         self.dual_softmax_weight = dual_softmax_weight
@@ -45,7 +45,7 @@ def dual_softmax_loss(X, Y, temp = 1, normalize = False):
     pos_conf = P[pos_mask]
     loss_pos = - alpha * torch.pow(1 - pos_conf, gamma) * pos_conf.log()
 
-    return 5 * loss_pos.mean()
+    return loss_pos.mean()
     
 def heatmap_loss(kpts, pts):
     C, H, W = kpts.shape
@@ -57,11 +57,6 @@ def heatmap_loss(kpts, pts):
         
     kpts = kpts.view(-1)
     labels = labels.view(-1)
-    
-    # Negative (background) loss to push predictions towards zero
-    # neg_conf = kpts[neg_mask]
-        
-    # Combine positive and negative losses
     
     BCE_loss = F.binary_cross_entropy(kpts, labels.float(), reduction='none')
     pt = torch.exp(-BCE_loss)

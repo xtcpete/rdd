@@ -1,3 +1,7 @@
+"""
+Modified from hloc
+https://github.com/cvg/Hierarchical-Localization.git
+"""
 import argparse
 import pprint
 from functools import partial
