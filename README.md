@@ -17,7 +17,7 @@
 
 ## Updates
 
-[06/06] Evaluation code for ScanNet added. 
+[06/06/2025] Evaluation code for ScanNet added. 
 <table>
   <tr>
     <th></th>
@@ -41,11 +41,11 @@
   </tr>
 </table>
 
-[05/16] SfM reconstruction through [COLMAP](https://github.com/colmap/colmap.git) added. We provide a ready-to-use [notebook](./demo_sfm.ipynb) for a simple example. Code adopted from [hloc](https://github.com/cvg/Hierarchical-Localization.git).
+[05/16/2025] SfM reconstruction through [COLMAP](https://github.com/colmap/colmap.git) added. We provide a ready-to-use [notebook](./demo_sfm.ipynb) for a simple example. Code adopted from [hloc](https://github.com/cvg/Hierarchical-Localization.git).
 
-[05/12] Training code and new weights released.
+[05/12/2025] Training code and new weights released.
 
-[05/12] We have updated the training code compared to what was described in the paper. In the original setup, the RDD was trained on the MegaDepth and Air-to-Ground datasets by resizing all images to the training resolution. In this release, we retrained RDD on MegaDepth only, using a combination of resizing and cropping, a strategy used by [ALIKE](https://github.com/Shiaoming/ALIKE). This change significantly improves robustness.
+[05/12/2025] We have updated the training code compared to what was described in the paper. In the original setup, the RDD was trained on the MegaDepth and Air-to-Ground datasets by resizing all images to the training resolution. In this release, we retrained RDD on MegaDepth only, using a combination of resizing and cropping, a strategy used by [ALIKE](https://github.com/Shiaoming/ALIKE). This change significantly improves robustness.
 
 <table>
   <tr>

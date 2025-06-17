@@ -172,8 +172,10 @@ class RDD_helper(nn.Module):
     
     def get_new_image_size(self, h, w, resize=1600):
         aspect_ratio = w / h
-        size = int(resize / aspect_ratio), resize
+        if h > w:
+            size = (resize, int(resize * aspect_ratio))
+        else:
+            size = (int(resize / aspect_ratio), resize)
 
         size = list(map(lambda x: int(x // 32 * 32), size)) # make sure size is divisible by 32
-        
         return size

@@ -190,9 +190,12 @@ class AirGroundPoseMNNBenchmark:
                             _make_evaluation_figure(im_A, im_B, kpts0, kpts1, epi_errs, e_t, e_R, path=name)
                         e_pose = max(e_t, e_R)
                         
-                        tot_e_t.append(e_t)
-                        tot_e_R.append(e_R)
-                        tot_e_pose.append(e_pose)
+                    else:
+                        e_t, e_R = np.inf, np.inf  # or any large sentinel value to indicate failure
+                        e_pose = max(e_t, e_R)
+                    tot_e_t.append(e_t)
+                    tot_e_R.append(e_R)
+                    tot_e_pose.append(e_pose)
                     idx += 1
                     
             tot_e_pose = np.array(tot_e_pose)
