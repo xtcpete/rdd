@@ -2,23 +2,31 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import poselib
+from .lightglue import LightGlue
 
 class DenseMatcher(nn.Module):
     def __init__(self, inv_temperature = 20, thr = 0.01):
         super().__init__()
         self.inv_temperature = inv_temperature
         self.thr = thr
+        self.lg_matcher = None
 
-    def forward(self, info0, info1, thr = None, err_thr=4, min_num_inliers=30):
+    def forward(self, info0, info1, thr = None, err_thr=4, min_num_inliers=30, anchor='mnn'):
         
         desc0 = info0['descriptors']
         desc1 = info1['descriptors']
         
-        inds, P = self.dual_softmax(desc0, desc1, thr=thr)
+        if anchor == 'mnn':
+            inds, P = self.dual_softmax(desc0, desc1, thr=thr)
+            mconf = P[inds[:,0], inds[:,1]]
+        elif anchor == 'lightglue':
+            # Use LightGlue's matching strategy
+            inds, mconf = self.lightglue(info0, info1, device=info0['keypoints'].device)
+        else:
+            raise ValueError(f"Unknown anchor type: {anchor}. Use 'mnn' or 'lightglue'.")
         
         mkpts_0 = info0['keypoints'][inds[:,0]]
         mkpts_1 = info1['keypoints'][inds[:,1]]
-        mconf = P[inds[:,0], inds[:,1]]
         Fm, inliers = self.get_fundamental_matrix(mkpts_0, mkpts_1)
         
         if inliers.sum() >= min_num_inliers:
@@ -41,6 +49,47 @@ class DenseMatcher(nn.Module):
             mconf = torch.cat([mconf, mconf_dense], dim=0)
 
         return mkpts_0, mkpts_1, mconf
+    
+    def lightglue(self, info0, info1, device='cpu'):
+        if self.lg_matcher is None:
+            lg_conf = {
+                "name": "lightglue",  # just for interfacing
+                "input_dim": 256,  # input descriptor dimension (autoselected from weights)
+                "descriptor_dim": 256,
+                "add_scale_ori": False,
+                "n_layers": 9,
+                "num_heads": 4,
+                "flash": True,  # enable FlashAttention if available.
+                "mp": False,  # enable mixed precision
+                "filter_threshold": 0.01,  # match threshold
+                "depth_confidence": -1,  # depth confidence threshold
+                "width_confidence": -1,  # width confidence threshold
+                "weights": './weights/RDD_lg-v2.pth',  # path to the weights
+            }
+            self.lg_matcher = LightGlue('rdd', **lg_conf).to(device)
+        
+        image0_data = {
+            'keypoints': info0['keypoints'][None],
+            'descriptors': info0['descriptors'][None],
+            'image_size': info0['image_size'],
+        }
+        
+        image1_data = {
+            'keypoints': info1['keypoints'][None],
+            'descriptors': info1['descriptors'][None],
+            'image_size': info1['image_size'],
+        }
+        
+        pred = {}
+        
+        with torch.no_grad():
+            pred.update({'image0': image0_data, 'image1': image1_data})
+            pred.update(self.lg_matcher({**pred}))
+            
+        matches = pred['matches'][0]
+        conf = pred['scores'][0]
+        
+        return matches, conf
 
     def get_fundamental_matrix(self, kpts_0, kpts_1):
         Fm, info = poselib.estimate_fundamental(kpts_0.cpu().numpy(), kpts_1.cpu().numpy(), {'max_epipolar_error': 1, 'progressive_sampling': True}, {})

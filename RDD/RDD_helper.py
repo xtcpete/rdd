@@ -109,7 +109,7 @@ class RDD_helper(nn.Module):
         return mkpts0.cpu().numpy(), mkpts1.cpu().numpy(), conf.cpu().numpy()
     
     @torch.inference_mode()
-    def match_dense(self, img0, img1, thr=0.01, resize=None):
+    def match_dense(self, img0, img1, thr=0.01, resize=None, anchor='mnn'):
         
         img0, scale0 = self.parse_input(img0, resize=resize)
         img1, scale1 = self.parse_input(img1, resize=resize)
@@ -118,7 +118,7 @@ class RDD_helper(nn.Module):
         out1 = self.RDD.extract_dense(img1)[0]
         
         # get top_k confident matches
-        mkpts0, mkpts1, conf = self.dense_matcher(out0, out1, thr, err_thr=self.RDD.stride)
+        mkpts0, mkpts1, conf = self.dense_matcher(out0, out1, thr, err_thr=self.RDD.stride, anchor=anchor)
         
         scale0 = 1.0 / scale0
         scale1 = 1.0 / scale1

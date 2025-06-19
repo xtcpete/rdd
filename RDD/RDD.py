@@ -131,8 +131,9 @@ class RDD(nn.Module):
         
     @torch.inference_mode()
     def extract_dense(self, x, n_limit=30000, thr=0.01):
-        self.set_softdetect(top_k=n_limit, scores_th=-1)
-            
+        
+        img_size = x.shape[-2:]
+        
         x, rh1, rw1 = self.preprocess_tensor(x)
 
         B, _, _H1, _W1 = x.shape
@@ -173,7 +174,9 @@ class RDD(nn.Module):
                     'descriptors': feats[b][valid[b]], 
                     'keypoints_dense': dense_keypoints[b][valid_dense[b]],
                     'scores_dense': dense_scores[b][valid_dense[b]],
-                    'descriptors_dense': dense_feats[b][valid_dense[b]]} for b in range(B)
+                    'descriptors_dense': dense_feats[b][valid_dense[b]],
+                    'image_size': img_size,
+                    } for b in range(B)
                 ]
         
     @torch.inference_mode()
