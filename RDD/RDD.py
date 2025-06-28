@@ -35,7 +35,9 @@ class RDD(nn.Module):
 
     def train(self, mode=True):
         super().train(mode)
-        if self.softdetect is None:
+        if self.softdetect is None: # prevent reinitialization in hloc
+            self.set_softdetect(top_k=500, scores_th=0.2) 
+        elif self.softdetect.top_k != 500 or self.softdetect.scores_th != 0.2: # reinitialize if parameters changed
             self.set_softdetect(top_k=500, scores_th=0.2)
         
     def eval(self):
