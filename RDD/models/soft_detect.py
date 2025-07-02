@@ -1,9 +1,9 @@
 # ALIKE: https://github.com/Shiaoming/ALIKE
+# XFeat https://www.verlab.dcc.ufmg.br/descriptors/xfeat_cvpr24/
 import torch
 from torch import nn
 import numpy as np
 import torch.nn.functional as F
-
 
 # coordinates system
 #  ------------------------------>  [ x: range=-1.0~1.0; w: range=0~W ]
@@ -37,16 +37,6 @@ def simple_nms(scores, nms_radius: int):
         max_mask = max_mask | (new_max_mask & (~supp_mask))
     return torch.where(max_mask, scores, zeros)
 
-
-"""
-	"XFeat: Accelerated Features for Lightweight Image Matching, CVPR 2024."
-	https://www.verlab.dcc.ufmg.br/descriptors/xfeat_cvpr24/
-"""
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 class InterpolateSparse2d(nn.Module):
     """ Efficiently interpolate tensor at given sparse 2D positions. """ 
     def __init__(self, mode = 'bicubic', align_corners = False): 
@@ -71,7 +61,6 @@ class InterpolateSparse2d(nn.Module):
         grid = self.normgrid(pos, H, W).unsqueeze(-2).to(x.dtype)
         x = F.grid_sample(x, grid, mode = self.mode , align_corners = False)
         return x.permute(0,2,3,1).squeeze(-2)
-
 
 class SoftDetect(nn.Module):
     def __init__(self, radius=2, top_k=0, scores_th=0.2, n_limit=20000):
@@ -101,8 +90,7 @@ class SoftDetect(nn.Module):
         b, c, h, w = scores_map.shape
         scores_nograd = scores_map.detach()
         
-        # nms_scores = simple_nms(scores_nograd, self.radius)
-        nms_scores = simple_nms(scores_nograd, 2)
+        nms_scores = simple_nms(scores_nograd, self.radius)
 
         # remove border
         nms_scores[:, :, :self.radius + 1, :] = 0
@@ -186,65 +174,3 @@ class SoftDetect(nn.Module):
         # keypoints: B M 2
         # scoredispersitys:
         return keypoints, kptscores, scoredispersitys
-    
-import torch
-import torch.nn as nn
-
-class Detect(nn.Module):
-    def __init__(self, stride=4, top_k=0, scores_th=0, n_limit=20000):
-        super().__init__()
-        self.stride = stride
-        self.top_k = top_k
-        self.scores_th = scores_th
-        self.n_limit = n_limit
-
-    def forward(self, scores, coords, w, h):
-        """
-        scores: B x N x 1 (keypoint confidence scores)
-        coords: B x N x 2 (offsets within stride x stride window)
-        w, h: Image dimensions
-        """
-        b, n, _ = scores.shape
-        kpts_list = []
-        scores_list = []
-
-        for b_idx in range(b):
-            score = scores[b_idx].squeeze(-1)  # Shape: (N,)
-            coord = coords[b_idx]  # Shape: (N, 2)
-
-            # Apply score thresholding
-            if self.scores_th >= 0:
-                valid = score > self.scores_th
-            else:
-                valid = score > score.mean()
-
-            valid_indices = valid.nonzero(as_tuple=True)[0]  # Get valid indices
-            if valid_indices.numel() == 0:
-                kpts_list.append(torch.empty((0, 2), device=scores.device))
-                scores_list.append(torch.empty((0,), device=scores.device))
-                continue
-
-            # Compute keypoint locations in original image space
-            i_ids = valid_indices  # Indices where keypoints exist
-            kpts = torch.stack([i_ids % w, i_ids // w], dim=1).to(torch.float) * self.stride  # Grid position
-            kpts += coord[i_ids] * self.stride  # Apply offset
-
-            # Normalize keypoints to [-1, 1] range
-            kpts = (kpts / torch.tensor([w - 1, h - 1], device=kpts.device, dtype=kpts.dtype)) * 2 - 1
-
-            # Filter top-k keypoints if needed
-            scores_valid = score[valid_indices]
-            if self.top_k > 0 and len(kpts) > self.top_k:
-                topk = torch.topk(scores_valid, self.top_k, dim=0)
-                kpts = kpts[topk.indices]
-                scores_valid = topk.values
-            elif self.top_k < 0:
-                if len(kpts) > self.n_limit:
-                    sorted_idx = scores_valid.argsort(descending=True)[:self.n_limit]
-                    kpts = kpts[sorted_idx]
-                    scores_valid = scores_valid[sorted_idx]
-
-            kpts_list.append(kpts)
-            scores_list.append(scores_valid)
-
-        return kpts_list, scores_list
