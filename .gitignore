@@ -8,3 +8,5 @@ weights/
 outputs
 **/build/
 **.so
+data/*
+!data/.gitkeep

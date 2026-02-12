@@ -16,6 +16,60 @@
 - [Acknowledgements](#acknowledgements)
 
 ## Updates
+[02/11/2025] We updated RDD by replacing the backbone with ConvNeXt, achieving detector-free–level performance. The corresponding code is available in the v3 branch.
+
+<table>
+  <tr>
+    <th></th>
+    <th colspan="3">MegaDepth-1500</th>
+    <th colspan="3">MegaDepth-View</th>
+    <th colspan="3">Air-to-Ground</th>
+  </tr>
+  <tr>
+    <td></td>
+    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
+    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
+    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
+  </tr>
+  <tr>
+    <td>RDD-v3</td>
+    <td>53.6</td><td>69.3</td><td>81.3</td>
+    <td>56.9</td><td>71.9</td><td>82.3</td>
+    <td>56.3</td><td>71.2</td><td>81.7</td>
+  </tr>
+  <tr>
+    <td>RDD-v2</td>
+    <td>52.4</td><td>68.5</td><td>80.1</td>
+    <td>52.0</td><td>67.1</td><td>78.2</td>
+    <td>45.8</td><td>58.6</td><td>71.0</td>
+  </tr>
+  <tr>
+    <td>RDD-v1</td>
+    <td>48.2</td><td>65.2</td><td>78.3</td>
+    <td>38.3</td><td>53.1</td><td>65.6</td>
+    <td>41.4</td><td>56.0</td><td>67.8</td>
+  </tr>
+  <tr>
+    <td>RDD-v3+LG</td>
+    <td>56.3</td><td>72.4</td><td>83.9</td>
+    <td>60.3</td><td>74.2</td><td>84.4</td>
+    <td>63.1</td><td>76.9</td><td>86.3</td>
+  </tr>
+  <tr>
+    <td>RDD-v2+LG</td>
+    <td>53.3</td><td>69.8</td><td>82.0</td>
+    <td>59.0</td><td>74.2</td><td>84.0</td>
+    <td>54.8</td><td>69.0</td><td>79.1</td>
+  </tr>
+  <tr>
+    <td>RDD-v1+LG</td>
+    <td>52.3</td><td>68.9</td><td>81.8</td>
+    <td>54.2</td><td>69.3</td><td>80.3</td>
+    <td>55.1</td><td>68.9</td><td>78.9</td>
+  </tr>
+</table>
+
+[02/11/2025] Air-to-Ground training data is available [here](https://huggingface.co/datasets/xtcpete/air_ground). The aerial images are licensed under cc-by-4.0 and the ground images are sourced from [MegaDepth](https://www.cs.cornell.edu/projects/megadepth/).
 
 [06/06/2025] Evaluation code for ScanNet added. 
 <table>
@@ -46,45 +100,6 @@
 [05/12/2025] Training code and new weights released.
 
 [05/12/2025] We have updated the training code compared to what was described in the paper. In the original setup, the RDD was trained on the MegaDepth and Air-to-Ground datasets by resizing all images to the training resolution. In this release, we retrained RDD on MegaDepth only, using a combination of resizing and cropping, a strategy used by [ALIKE](https://github.com/Shiaoming/ALIKE). This change significantly improves robustness.
-
-<table>
-  <tr>
-    <th></th>
-    <th colspan="3">MegaDepth-1500</th>
-    <th colspan="3">MegaDepth-View</th>
-    <th colspan="3">Air-to-Ground</th>
-  </tr>
-  <tr>
-    <td></td>
-    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
-    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
-    <td>AUC 5&deg</td><td>AUC 10&deg</td><td>AUC 20&deg</td>
-  </tr>
-  <tr>
-    <td>RDD-v2</td>
-    <td>52.4</td><td>68.5</td><td>80.1</td>
-    <td>52.0</td><td>67.1</td><td>78.2</td>
-    <td>45.8</td><td>58.6</td><td>71.0</td>
-  </tr>
-  <tr>
-    <td>RDD-v1</td>
-    <td>48.2</td><td>65.2</td><td>78.3</td>
-    <td>38.3</td><td>53.1</td><td>65.6</td>
-    <td>41.4</td><td>56.0</td><td>67.8</td>
-  </tr>
-  <tr>
-    <td>RDD-v2+LG</td>
-    <td>53.3</td><td>69.8</td><td>82.0</td>
-    <td>59.0</td><td>74.2</td><td>84.0</td>
-    <td>54.8</td><td>69.0</td><td>79.1</td>
-  </tr>
-  <tr>
-    <td>RDD-v1+LG</td>
-    <td>52.3</td><td>68.9</td><td>81.8</td>
-    <td>54.2</td><td>69.3</td><td>80.3</td>
-    <td>55.1</td><td>68.9</td><td>78.9</td>
-  </tr>
-</table>
 
 ## Installation
 
