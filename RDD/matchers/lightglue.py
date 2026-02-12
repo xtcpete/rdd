@@ -385,6 +385,12 @@ class LightGlue(nn.Module):
                     f"{{{','.join(self.features)}}}"
                 )
             for k, v in self.features[features].items():
+                if (
+                    features == "rdd"
+                    and k == "weights"
+                    and getattr(conf, "weights", None) is not None
+                ):
+                    continue
                 setattr(conf, k, v)
 
         if conf.input_dim != conf.descriptor_dim:
