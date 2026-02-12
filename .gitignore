@@ -1,0 +1,10 @@
+data/*
+!data/.gitkeep
+outputs
+__pycache__/
+*.pyc
+*.pth
+runs/*
+!runs/.gitkeep
+weights/*
+!weights/.gitkeep
