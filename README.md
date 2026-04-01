@@ -16,7 +16,7 @@
 - [Acknowledgements](#acknowledgements)
 
 ## Updates
-[02/11/2025] We updated RDD by replacing the backbone with ConvNeXt, achieving detector-free–level performance. The corresponding code is available in the v3 branch.
+[02/11/2026] We updated RDD by replacing the backbone with ConvNeXt, achieving detector-free–level performance. The corresponding code is available in the v3 branch.
 
 <table>
   <tr>
@@ -69,7 +69,7 @@
   </tr>
 </table>
 
-[02/11/2025] Air-to-Ground training data is available [here](https://huggingface.co/datasets/xtcpete/air_ground). The aerial images are licensed under cc-by-4.0 and the ground images are sourced from [MegaDepth](https://www.cs.cornell.edu/projects/megadepth/).
+[02/11/2026] Air-to-Ground training data is available [here](https://huggingface.co/datasets/xtcpete/air_ground). The aerial images are licensed under cc-by-4.0 and the ground images are sourced from [MegaDepth](https://www.cs.cornell.edu/projects/megadepth/).
 
 [06/06/2025] Evaluation code for ScanNet added. 
 <table>
