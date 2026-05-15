@@ -80,7 +80,7 @@ pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https
 pip install -r requirements.txt
 # Compile custom operations.
 # You don't have to compile them to run RDD, but it is recommended for better performance.
-cd ./RDD/models/ops
+cd ./src/models/ops
 pip install -e .
 ```
 
