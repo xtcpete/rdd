@@ -101,7 +101,7 @@ For your convenience, we provide a ready-to-use [notebook](./demo_matching.ipynb
 ### Inference
 
 ```python
-from RDD.RDD import build
+from src.RDD import build
 
 RDD_model = build()
 
