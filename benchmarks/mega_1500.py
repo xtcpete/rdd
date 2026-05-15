@@ -6,8 +6,8 @@ from PIL import Image
 import tqdm
 import cv2
 import argparse
-from RDD.RDD_helper import RDD_helper
-from RDD.RDD import build
+from src.RDD_helper import RDD_helper
+from src.RDD import build
 import matplotlib.pyplot as plt
 import matplotlib
 import os
@@ -118,7 +118,7 @@ class MegaDepthPoseMNNBenchmark:
         ]
         self.data_root = data_root
 
-    def benchmark(self, model_helper, model_name = None, scale_intrinsics = False, calibrated = True, plot_every_iter=1, plot=False, method='sparse'):
+    def benchmark(self, model_helper, model_name = None, scale_intrinsics = False, calibrated = True, plot_every_iter=1, plot=False, method='sparse', pose_estimator='opencv'):
         
         with torch.no_grad():
             data_root = self.data_root
@@ -183,6 +183,7 @@ class MegaDepthPoseMNNBenchmark:
                             K1,
                             norm_threshold,
                             conf=0.99999,
+                            estimator=pose_estimator,
                         )
                     if ret is not None:
                         R_est, t_est, mask = ret
@@ -191,16 +192,15 @@ class MegaDepthPoseMNNBenchmark:
                         e_t, e_R = compute_pose_error(T0_to_1_est, R, t)
                         
                         epi_errs = compute_symmetrical_epipolar_errors(T0_to_1, kpts0, kpts1, K0, K1)
-                        if scene_ind % plot_every_iter == 0 and plot:
+                        if pairind % plot_every_iter == 0 and plot:
 
-                            if not os.path.exists(f'outputs/mega_1500/{model_name}_{method}'):
-                                os.mkdir(f'outputs/mega_1500/{model_name}_{method}')
-                            name = f'outputs/mega_1500/{model_name}_{method}/{scene_name}_{pairind}.png'
+                            if not os.path.exists(f'outputs/mega_1500/{model_name}_{method}_{pose_estimator}'):
+                                os.makedirs(f'outputs/mega_1500/{model_name}_{method}_{pose_estimator}')
+                            name = f'outputs/mega_1500/{model_name}_{method}_{pose_estimator}/{scene_name}_{pairind}.png'
                             _make_evaluation_figure(im_A, im_B, kpts0, kpts1, epi_errs, e_t, e_R, path=name)
                         e_pose = max(e_t, e_R)
-                        
                     else:
-                        e_t, e_R = np.inf, np.inf  # or any large sentinel value to indicate failure
+                        e_t, e_R = np.inf, np.inf
                         e_pose = max(e_t, e_R)
                         
                     tot_e_t.append(e_t)
@@ -232,28 +232,34 @@ def parse_arguments():
     
     parser.add_argument("--data_root", type=str, default="./data/megadepth_test_1500", help="Path to the MegaDepth dataset.")
 
-    parser.add_argument("--weights", type=str, default="./weights/RDD-v2.pth", help="Path to the model checkpoint.")
+    parser.add_argument("--weights", type=str, default="./weights/rdd.pth", help="Path to the model checkpoint.")
 
     parser.add_argument("--plot", action="store_true", help="Whether to plot the results.")
 
     parser.add_argument("--method", type=str, default="sparse", help="Method for matching.")
+
+    parser.add_argument("--pose_estimator", type=str, default="opencv", choices=["opencv", "poselib"], help="Pose estimator backend.")
+
+    parser.add_argument("--config", type=str, default=None, help="Path to the model config.")
     
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_arguments()    
     if not os.path.exists('outputs'):
-        os.mkdir('outputs')
+        os.makedirs('outputs')
 
     if not os.path.exists(f'outputs/mega_1500'):
-        os.mkdir(f'outputs/mega_1500')
-        
-    model = build(weights=args.weights)
+        os.makedirs(f'outputs/mega_1500')
+
+    model = build(config=args.config, weights=args.weights)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
     benchmark = MegaDepthPoseMNNBenchmark(data_root=args.data_root)
     model.eval()
     model_helper = RDD_helper(model)
     with torch.no_grad():
         method = args.method
-        out = benchmark.benchmark(model_helper, model_name='RDD', plot_every_iter=1, plot=args.plot, method=method)
-        with open(f'outputs/mega_1500/RDD_{method}.txt', 'w') as f:
+        out = benchmark.benchmark(model_helper, model_name='RDD', plot_every_iter=1, plot=args.plot, method=method, pose_estimator=args.pose_estimator)
+        with open(f'outputs/mega_1500/RDD_{method}_{args.pose_estimator}.txt', 'w') as f:
             f.write(str(out))

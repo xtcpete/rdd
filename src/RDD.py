@@ -1,58 +1,70 @@
 # Description: RDD model
+from pathlib import Path
+
 import torch
 import torch.nn.functional as F
 from torch import nn
 import numpy as np
-from .utils import NestedTensor, nested_tensor_from_tensor_list, to_pixel_coords, read_config
+from .utils import NestedTensor, nested_tensor_from_tensor_list, to_pixel_coords, lower_config
 from .models.detector import build_detector
 from .models.descriptor import build_descriptor
 from .models.soft_detect import SoftDetect
 from .models.interpolator import InterpolateSparse2d
+from .config.default import get_cfg_defaults
 
 class RDD(nn.Module):
 
-    def __init__(self, detector, descriptor, detection_threshold=0.5, top_k=4096, train_detector=False, device='cuda'):
+    def __init__(self, detector, descriptor, detection_threshold=0.5, top_k=4096):
         super().__init__()
         self.detector = detector
         self.descriptor = descriptor
         self.interpolator = InterpolateSparse2d('bicubic')
         self.detection_threshold = detection_threshold
         self.top_k = top_k
-        self.device = device
-        if train_detector:
-            for p in self.detector.parameters():
-                p.requires_grad = True
-            for p in self.descriptor.parameters():
-                p.requires_grad = False
-        else:
-            for p in self.detector.parameters():
-                p.requires_grad = False
-            for p in self.descriptor.parameters():
-                p.requires_grad = True
-        
+        self.register_buffer('_device_ref', torch.empty(0), persistent=False)
         self.softdetect = None
         self.stride = descriptor.stride
+
+    @property
+    def device(self) -> torch.device:
+        return self._device_ref.device
+
+    def to(self, *args, **kwargs):  # type: ignore[override]
+        result = super().to(*args, **kwargs)
+        if result.softdetect is not None:
+            result.softdetect = result.softdetect.to(result.device)
+        return result
 
     def train(self, mode=True):
         super().train(mode)
         
     def eval(self):
+        self.set_softdetect(self.top_k, self.detection_threshold)
         super().eval()
-        self.set_softdetect(top_k=self.top_k, scores_th=0.01)
         
-    def forward(self, samples: NestedTensor):
+    def forward(self, samples: NestedTensor, detector_only: bool = False):
         
         if not isinstance(samples, NestedTensor):
             samples = nested_tensor_from_tensor_list(samples)
-        
+
+        if getattr(self.detector, 'uses_descriptor_features', False):
+            feats, matchibility = self.descriptor(samples)
+            scoremap = self.detector(feats, samples.tensors.shape[-2:])
+            if detector_only:
+                return scoremap
+            return feats, scoremap, matchibility
+
         scoremap = self.detector(samples)
         
+        if detector_only:
+            return scoremap
+
         feats, matchibility = self.descriptor(samples)
         
         return feats, scoremap, matchibility
     
     def set_softdetect(self, top_k=4096, scores_th=0.01):
-        self.softdetect = SoftDetect(radius=2, top_k=top_k, scores_th=scores_th)
+        self.softdetect = SoftDetect(radius=2, top_k=top_k, scores_th=scores_th).to(self.device)
     
     @torch.inference_mode()
     def filter(self, matchibility):
@@ -66,7 +78,7 @@ class RDD(nn.Module):
     @torch.inference_mode()
     def extract(self, x):
         if self.softdetect is None:
-            self.eval()
+            self.set_softdetect(top_k=self.top_k, scores_th=self.detection_threshold)
         
         x, rh1, rw1 = self.preprocess_tensor(x)
         x = x.to(self.device).float()
@@ -74,12 +86,10 @@ class RDD(nn.Module):
         M1, K1, H1 = self.forward(x)
         M1 = F.normalize(M1, dim=1)
         
-        keypoints, kptscores, scoredispersitys = self.softdetect(K1)
+        keypoints, kptscores, scoredispersitys = self.softdetect(K1, normalized_coordinates=False)
         
         keypoints = torch.vstack([keypoints[b].unsqueeze(0) for b in range(B)])
         kptscores = torch.vstack([kptscores[b].unsqueeze(0) for b in range(B)])
-        
-        keypoints = to_pixel_coords(keypoints, _H1, _W1)
         
         feats = self.interpolator(M1, keypoints, H = _H1, W = _W1)
         
@@ -87,12 +97,11 @@ class RDD(nn.Module):
 		
         # Correct kpt scale
         keypoints = keypoints * torch.tensor([rw1,rh1], device=keypoints.device).view(1, -1)
-        valid = kptscores > self.detection_threshold
 
         return [  
-                    {'keypoints': keypoints[b][valid[b]],
-                    'scores': kptscores[b][valid[b]],
-                    'descriptors': feats[b][valid[b]]} for b in range(B) 
+                    {'keypoints': keypoints[b],
+                    'scores': kptscores[b],
+                    'descriptors': feats[b]} for b in range(B) 
                 ]	
         
     @torch.inference_mode()
@@ -106,6 +115,13 @@ class RDD(nn.Module):
             from third_party import extract_aliked_kpts
             img = x
             mkpts, scores = extract_aliked_kpts(img, self.device)
+        elif model == 'alike':
+            from third_party import extract_alike_kpts
+            img = x[0].permute(1,2,0).expand(-1,-1,3).cpu().numpy() * 255
+            kpts, scores = extract_alike_kpts(img, self.device)
+            mkpts = kpts[None]
+            scores = scores[None]
+
         else:
             raise ValueError('Unknown model')
     
@@ -139,12 +155,10 @@ class RDD(nn.Module):
         M1, K1, H1 = self.forward(x)
         M1 = F.normalize(M1, dim=1)
         
-        keypoints, kptscores, scoredispersitys = self.softdetect(K1)
+        keypoints, kptscores, scoredispersitys = self.softdetect(K1, normalized_coordinates=False)
         
         keypoints = torch.vstack([keypoints[b].unsqueeze(0) for b in range(B)])
         kptscores = torch.vstack([kptscores[b].unsqueeze(0) for b in range(B)])
-        
-        keypoints = to_pixel_coords(keypoints, _H1, _W1)
         
         feats = self.interpolator(M1, keypoints, H = _H1, W = _W1)
         
@@ -163,13 +177,12 @@ class RDD(nn.Module):
         keypoints = keypoints * torch.tensor([rw1,rh1], device=keypoints.device).view(1, -1)
         dense_keypoints = dense_keypoints * torch.tensor([rw1,rh1], device=dense_keypoints.device).view(1, -1)	
 
-        valid = kptscores > self.detection_threshold
         valid_dense = dense_scores > thr		
 
         return [  
-                    {'keypoints': keypoints[b][valid[b]],
-                    'scores': kptscores[b][valid[b]],
-                    'descriptors': feats[b][valid[b]], 
+                    {'keypoints': keypoints[b],
+                    'scores': kptscores[b],
+                    'descriptors': feats[b], 
                     'keypoints_dense': dense_keypoints[b][valid_dense[b]],
                     'scores_dense': dense_scores[b][valid_dense[b]],
                     'descriptors_dense': dense_feats[b][valid_dense[b]],
@@ -239,24 +252,68 @@ class RDD(nn.Module):
         x1_n = torch.stack((x1_n[2], x1_n[1]), dim=-1).reshape(B, H * W, 2)
         return x1_n
 
-def build(config=None, weights=None):
+def _lower_mapping(config):
+    if isinstance(config, dict):
+        return {k.lower(): _lower_mapping(v) for k, v in config.items()}
+    return lower_config(config)
+
+
+def _resolve_build_config(config=None, config_file=None):
+    if config is not None and config_file is not None:
+        raise ValueError("Pass either 'config' or 'config_file', not both.")
+
+    if config_file is not None:
+        config = config_file
+
     if config is None:
-        config = read_config('./configs/default.yaml')
+        default_cfg = get_cfg_defaults()
+        return lower_config(default_cfg)['rdd']
+
+    if isinstance(config, (str, Path)):
+        cfg = get_cfg_defaults()
+        cfg.merge_from_file(str(config))
+        return lower_config(cfg)['rdd']
+
+    config = _lower_mapping(config)
+    if isinstance(config, dict) and 'rdd' in config and 'descriptor' not in config:
+        return config['rdd']
+    return config
+
+
+def build(config=None, weights=None, config_file=None):
+    """Build an RDD model from defaults, a config dict, or a YAML config file."""
+    checkpoint = None
     if weights is not None:
-        config['weights'] = weights
-    device = torch.device(config['device'])
-    print('config', config)
-    detector = build_detector(config)
-    descriptor = build_descriptor(config)
+        checkpoint = torch.load(weights, map_location='cpu')
+        if config is None and config_file is None and isinstance(checkpoint, dict):
+            hyper_parameters = checkpoint.get('hyper_parameters', {})
+            checkpoint_config = hyper_parameters.get('model_config')
+            if checkpoint_config is not None:
+                config = checkpoint_config
+
+    config = _resolve_build_config(config=config, config_file=config_file)
+
+    descriptor = build_descriptor(config['descriptor'])
+    detector_config = dict(config['detector'])
+    if detector_config.get('type', 'legacy') == 'shared_descriptor':
+        detector_config.setdefault('input_dim', descriptor.hidden_dim)
+    detector = build_detector(detector_config)
     model = RDD(
         detector, 
         descriptor, 
-        detection_threshold=config['detection_threshold'], 
-        top_k=config['top_k'], 
-        train_detector=config['train_detector'],
-        device=device
+        detection_threshold=config['detection_thr'], 
+        top_k=config['top_k']
     )
-    if 'weights' in config and config['weights'] is not None:
-        model.load_state_dict(torch.load(config['weights'], map_location='cpu'))
-    model.to(device)
+
+    if checkpoint is not None:
+        state = checkpoint
+        if isinstance(state, dict):
+            if 'model' in state:
+                state = state['model']
+            elif 'state_dict' in state:
+                state = state['state_dict']
+                # if keys start with model. remove it
+                if list(state.keys())[0].startswith('model.'):
+                    state = {k[len('model.'):]: v for k, v in state.items()}
+        model.load_state_dict(state, strict=True)
     return model

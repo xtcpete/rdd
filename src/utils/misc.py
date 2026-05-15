@@ -20,6 +20,9 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 from torch import Tensor
+from yacs.config import CfgNode as CN
+from itertools import chain
+
 
 # needed due to empty tensor bug in pytorch and torchvision 0.5
 import torchvision
@@ -529,3 +532,11 @@ def read_config(file_path):
     with open(file_path, 'r') as file:
         config = yaml.safe_load(file)
     return config
+
+def lower_config(yacs_cfg):
+    if not isinstance(yacs_cfg, CN):
+        return yacs_cfg
+    return {k.lower(): lower_config(v) for k, v in yacs_cfg.items()}
+
+def flattenList(x):
+    return list(chain(*x))

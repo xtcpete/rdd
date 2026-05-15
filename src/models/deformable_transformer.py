@@ -263,8 +263,8 @@ def _get_activation_fn(activation):
     raise RuntimeError(F"activation should be relu/gelu, not {activation}.")
 
 
-def build_deforamble_transformer(config):
-    return DeformableTransformer(d_model=config['d_model'], nhead=config['nhead'],
+def build_deformable_transformer(config):
+    return DeformableTransformer(d_model=config['d_model'], nhead=config['nheads'],
         num_encoder_layers=config['num_encoder_layers'], dim_feedforward=config['dim_feedforward'], dropout=config['dropout'],
         activation=config['activation'],
         num_feature_levels=config['num_feature_levels'], enc_n_points=config['enc_n_points'])

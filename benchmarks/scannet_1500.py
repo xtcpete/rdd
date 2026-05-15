@@ -6,8 +6,8 @@ from PIL import Image
 from tqdm import tqdm
 import cv2
 import argparse
-from RDD.RDD_helper import RDD_helper
-from RDD.RDD import build
+from src.RDD_helper import RDD_helper
+from src.RDD import build
 import matplotlib.pyplot as plt
 import matplotlib
 import os
@@ -117,7 +117,7 @@ class ScanNetPoseMNNBenchmark:
         self.data_root = data_root
         self.intrinsics = np.load(f'{data_root}/intrinsics.npz', allow_pickle=True)
 
-    def benchmark(self, model_helper, model_name = None, scale_intrinsics = False, calibrated = True, plot_every_iter=1, plot=False, method='sparse'):
+    def benchmark(self, model_helper, model_name = None, scale_intrinsics = False, calibrated = True, plot_every_iter=1, plot=False, method='sparse', pose_estimator='opencv'):
         
         with torch.no_grad():
             data_root = self.data_root
@@ -146,6 +146,9 @@ class ScanNetPoseMNNBenchmark:
                 im_B = cv2.imread(im_B_path)
                 im_A = cv2.resize(im_A, (640, 480))
                 im_B = cv2.resize(im_B, (640, 480))
+                # sizes after resize (width, height)
+                w0, h0 = 640, 480
+                w1, h1 = 640, 480
             
                 if method == 'dense':
                     kpts0, kpts1, conf = model_helper.match_dense(im_A, im_B, thr=0.01, resize=None)
@@ -177,6 +180,7 @@ class ScanNetPoseMNNBenchmark:
                         K1,
                         norm_threshold,
                         conf=0.99999,
+                        estimator=pose_estimator,
                     )
                 if ret is not None:
                     R_est, t_est, mask = ret
@@ -187,13 +191,13 @@ class ScanNetPoseMNNBenchmark:
                     epi_errs = compute_symmetrical_epipolar_errors(T0_to_1, kpts0, kpts1, K0, K1)
                     if pairind % plot_every_iter == 0 and plot:
 
-                        if not os.path.exists(f'outputs/scannet/{model_name}_{method}'):
-                            os.mkdir(f'outputs/scannet/{model_name}_{method}')
-                        name = f'outputs/scannet/{model_name}_{method}/{scene_name}_{pairind}.png'
+                        if not os.path.exists(f'outputs/scannet/{model_name}_{method}_{pose_estimator}'):
+                            os.makedirs(f'outputs/scannet/{model_name}_{method}_{pose_estimator}')
+                        name = f'outputs/scannet/{model_name}_{method}_{pose_estimator}/{scene_name}_{pairind}.png'
                         _make_evaluation_figure(im_A, im_B, kpts0, kpts1, epi_errs, e_t, e_R, path=name)
                     e_pose = max(e_t, e_R)
                 else:
-                    e_t, e_R = np.inf, np.inf  # or any large sentinel value to indicate failure
+                    e_t, e_R = np.inf, np.inf
                     e_pose = max(e_t, e_R)
                 tot_e_t.append(e_t)
                 tot_e_R.append(e_R)
@@ -224,28 +228,34 @@ def parse_arguments():
     
     parser.add_argument("--data_root", type=str, default="./data/scannet_test_1500", help="Path to the ScanNet dataset.")
 
-    parser.add_argument("--weights", type=str, default="./weights/RDD-v2.pth", help="Path to the model checkpoint.")
+    parser.add_argument("--weights", type=str, default="./weights/rdd.pth", help="Path to the model checkpoint.")
 
     parser.add_argument("--plot", action="store_true", help="Whether to plot the results.")
 
     parser.add_argument("--method", type=str, default="sparse", help="Method for matching.")
+
+    parser.add_argument("--pose_estimator", type=str, default="opencv", choices=["opencv", "poselib"], help="Pose estimator backend.")
+
+    parser.add_argument("--config", type=str, default=None, help="Path to the config file for the model")
     
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_arguments()    
     if not os.path.exists('outputs'):
-        os.mkdir('outputs')
+        os.makedirs('outputs')
 
     if not os.path.exists(f'outputs/scannet'):
-        os.mkdir(f'outputs/scannet')
+        os.makedirs(f'outputs/scannet')
         
-    model = build(weights=args.weights)
+    model = build(config=args.config, weights=args.weights)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
     benchmark = ScanNetPoseMNNBenchmark(data_root=args.data_root)
     model.eval()
     model_helper = RDD_helper(model)
     with torch.no_grad():
         method = args.method
-        out = benchmark.benchmark(model_helper, model_name='RDD', plot_every_iter=1, plot=args.plot, method=method)
-        with open(f'outputs/scannet/RDD_{method}.txt', 'w') as f:
+        out = benchmark.benchmark(model_helper, model_name='RDD', plot_every_iter=1, plot=args.plot, method=method, pose_estimator=args.pose_estimator)
+        with open(f'outputs/scannet/RDD_{method}_{args.pose_estimator}.txt', 'w') as f:
             f.write(str(out))

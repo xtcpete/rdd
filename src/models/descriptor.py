@@ -2,9 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ..utils.misc import NestedTensor, nested_tensor_from_tensor_list
-import torchvision.transforms as transforms
 from .backbone import build_backbone
-from .deformable_transformer import build_deforamble_transformer
+from .deformable_transformer import build_deformable_transformer
 
 class BasicLayer(nn.Module):
 	"""
@@ -22,19 +21,23 @@ class BasicLayer(nn.Module):
 	  return self.layer(x)
 
 class RDD_Descriptor(nn.Module):
-    def __init__(self, backbone, transformer, num_feature_levels):
+    def __init__(self, backbone, hidden_dim, num_feature_levels, transformer=None):
         super().__init__()
         self.transformer = transformer
-        self.hidden_dim = transformer.d_model
+        self.hidden_dim = hidden_dim
         self.num_feature_levels = num_feature_levels
+        self.use_deformable_transformer = transformer is not None
+
+        matchibility_hidden_dim = max(self.hidden_dim // 2, 64)
+        matchibility_low_dim = max(matchibility_hidden_dim // 2, 32)
         
         self.matchibility_head = nn.Sequential(
-										BasicLayer(256, 128, 1, padding=0),
-										BasicLayer(128, 64, 1, padding=0),
-										nn.Conv2d (64, 1, 1),
+										BasicLayer(self.hidden_dim, matchibility_hidden_dim, 1, padding=0),
+										BasicLayer(matchibility_hidden_dim, matchibility_low_dim, 1, padding=0),
+										nn.Conv2d(matchibility_low_dim, 1, 1),
 										nn.Sigmoid()
 									)
-        
+
         if num_feature_levels > 1:
             num_backbone_outs = len(backbone.strides)
             input_proj_list = []
@@ -91,19 +94,24 @@ class RDD_Descriptor(nn.Module):
                 masks.append(mask)
                 pos.append(pos_l)
         
-        flatten_feats, spatial_shapes, level_start_index = self.transformer(srcs, masks, pos)
-        # Reshape the flattened features back to the original spatial shapes
-        feats = []
-        level_start_index = torch.cat((level_start_index, torch.tensor([flatten_feats.shape[1]+1]).to(level_start_index.device)))
-        for i, shape in enumerate(spatial_shapes):
-            assert len(shape) == 2
-            temp = flatten_feats[:, level_start_index[i] : level_start_index[i+1], :]
-            feats.append(temp.transpose(1, 2).view(-1, self.hidden_dim, *shape))
-        
-        # Sum up the features from different levels
+        if self.use_deformable_transformer:
+            flatten_feats, spatial_shapes, level_start_index = self.transformer(srcs, masks, pos)
+            feats = []
+            level_start_index = torch.cat((
+                level_start_index,
+                torch.tensor([flatten_feats.shape[1]], device=level_start_index.device),
+            ))
+            for i, shape in enumerate(spatial_shapes):
+                assert len(shape) == 2
+                temp = flatten_feats[:, level_start_index[i]: level_start_index[i + 1], :]
+                feats.append(temp.transpose(1, 2).view(-1, self.hidden_dim, *shape))
+        else:
+            # ConvNeXt-only baseline: use projected backbone features directly.
+            feats = srcs
+
         final_feature = feats[0]
         for feat in feats[1:]:
-            final_feature = final_feature + F.interpolate(feat, size=final_feature.shape[-2:], mode='bilinear', align_corners=True)
+            final_feature = final_feature + F.interpolate(feat, size=final_feature.shape[-2:], mode='bilinear', align_corners=False)
         
         matchibility = self.matchibility_head(final_feature)
         
@@ -112,5 +120,12 @@ class RDD_Descriptor(nn.Module):
     
 def build_descriptor(config):
     backbone = build_backbone(config)
-    transformer = build_deforamble_transformer(config)
-    return RDD_Descriptor(backbone, transformer, config['num_feature_levels'])
+    transformer = None
+    if config.get('use_deformable_transformer', True):
+        transformer = build_deformable_transformer(config)
+    return RDD_Descriptor(
+        backbone,
+        hidden_dim=config['d_model'],
+        num_feature_levels=config['num_feature_levels'],
+        transformer=transformer,
+    )

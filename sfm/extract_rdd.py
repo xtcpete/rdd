@@ -20,15 +20,17 @@ from hloc import logger
 from hloc.utils.base_model import dynamic_load
 from hloc.utils.io import list_h5_names, read_image
 from hloc.utils.parsers import parse_image_lists
-from RDD.RDD import build
-from RDD.utils import read_config
+from src.RDD import build
+from src.config.default import get_cfg_defaults
+from src.utils.misc import lower_config
 
 confs = {
     'rdd': {
         "output": "feats-rdd-n4096",
         "model": {
             'config_path': './configs/default.yaml',
-            'weights': './weights/RDD-v2.pth',
+            'weights': './weights/rdd_full.pth',
+            'max_keypoints': 4096,
         },
         "preprocessing": {
             "grayscale": False,
@@ -46,7 +48,7 @@ def main(
     as_half: bool = True,
     image_list: Optional[Union[Path, List[str]]] = None,
     feature_path: Optional[Path] = None,
-    overwrite: bool = False,
+    overwrite: bool = False
 ) -> Path:
     logger.info(
         "Extracting local features with configuration:" f"\n{pprint.pformat(conf)}"
@@ -65,17 +67,20 @@ def main(
         return feature_path
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    config = read_config(conf["model"]["config_path"])
-    config['device'] = device
+    config = get_cfg_defaults()
+    config = lower_config(config)
+    config = config['rdd']
+    config['top_k'] = conf["model"]['max_keypoints']
     model = build(config, conf["model"]["weights"])
+    model.to(device)
     model.eval()
     loader = torch.utils.data.DataLoader(
         dataset, num_workers=1, shuffle=False, pin_memory=True
     )
     for idx, data in enumerate(tqdm(loader)):
         name = dataset.names[idx]
+            
         features = model.extract(data["image"])
-        
         pred = {
             "keypoints": [f["keypoints"] for f in features],
             "keypoint_scores": [f["scores"] for f in features],

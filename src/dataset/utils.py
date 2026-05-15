@@ -21,15 +21,6 @@ import numpy as np
 from numba import jit
 from copy import deepcopy
 
-try:
-    from utils.project_depth_nn_cython_pkg import project_depth_nn_cython
-
-    nn_cython = True
-except:
-    print('\033[1;41;37mWarning: using python to project depth!!!\033[0m')
-
-    nn_cython = False
-
 
 class EmptyTensorError(Exception):
     pass
@@ -499,12 +490,7 @@ def project_nn(uv, z, depth):
     z: projected depth (xyz -> z) [N]
     depth: output depth array: [h,w]
     """
-    if nn_cython:
-        return project_depth_nn_cython(uv.astype(np.float64),
-                                       z.astype(np.float64),
-                                       depth.astype(np.float64))
-    else:
-        return project_depth_nn_python(uv, z, depth)
+    return project_depth_nn_python(uv, z, depth)
 
 
 def warp_depth(depth0, intrinsics0, intrinsics1, pose01, shape1):

@@ -42,7 +42,7 @@ class PositionEmbeddingSine(nn.Module):
         return pos
     
 def build_position_encoding(config):
-    N_steps = config['hidden_dim'] // 2
+    N_steps = config['d_model'] // 2
     # TODO find a better way of exposing other arguments
     position_embedding = PositionEmbeddingSine(N_steps, normalize=True)
     return position_embedding

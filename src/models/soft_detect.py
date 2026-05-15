@@ -37,31 +37,6 @@ def simple_nms(scores, nms_radius: int):
         max_mask = max_mask | (new_max_mask & (~supp_mask))
     return torch.where(max_mask, scores, zeros)
 
-class InterpolateSparse2d(nn.Module):
-    """ Efficiently interpolate tensor at given sparse 2D positions. """ 
-    def __init__(self, mode = 'bicubic', align_corners = False): 
-        super().__init__()
-        self.mode = mode
-        self.align_corners = align_corners
-
-    def normgrid(self, x, H, W):
-        """ Normalize coords to [-1,1]. """
-        return 2. * (x/(torch.tensor([W-1, H-1], device = x.device, dtype = x.dtype))) - 1.
-
-    def forward(self, x, pos, H, W):
-        """
-        Input
-            x: [B, C, H, W] feature tensor
-            pos: [B, N, 2] tensor of positions
-            H, W: int, original resolution of input 2d positions -- used in normalization [-1,1]
-
-        Returns
-            [B, N, C] sampled channels at 2d positions
-        """
-        grid = self.normgrid(pos, H, W).unsqueeze(-2).to(x.dtype)
-        x = F.grid_sample(x, grid, mode = self.mode , align_corners = False)
-        return x.permute(0,2,3,1).squeeze(-2)
-
 class SoftDetect(nn.Module):
     def __init__(self, radius=2, top_k=0, scores_th=0.2, n_limit=20000):
         """
@@ -80,7 +55,6 @@ class SoftDetect(nn.Module):
         self.kernel_size = 2 * self.radius + 1
         self.temperature = 0.1  # tuned temperature
         self.unfold = nn.Unfold(kernel_size=self.kernel_size, padding=self.radius)
-        self.sample_descriptor = InterpolateSparse2d('bicubic')
         # local xy grid
         x = torch.linspace(-self.radius, self.radius, self.kernel_size)
         # (kernel_size*kernel_size) x 2 : (w,h)

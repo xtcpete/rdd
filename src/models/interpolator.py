@@ -9,14 +9,19 @@ import torch.nn.functional as F
 
 class InterpolateSparse2d(nn.Module):
     """ Efficiently interpolate tensor at given sparse 2D positions. """ 
-    def __init__(self, mode = 'bilinear', align_corners = True): 
+    def __init__(self, mode = 'bilinear', align_corners = False): 
         super().__init__()
         self.mode = mode
         self.align_corners = align_corners
 
     def normgrid(self, x, H, W):
         """ Normalize coords to [-1,1]. """
-        return 2. * (x/(torch.tensor([W-1, H-1], device = x.device, dtype = x.dtype))) - 1.
+        if self.align_corners:
+            scale = torch.tensor([max(W - 1, 1), max(H - 1, 1)], device=x.device, dtype=x.dtype)
+            return 2.0 * (x / scale) - 1.0
+
+        scale = torch.tensor([W, H], device=x.device, dtype=x.dtype)
+        return (2.0 * x + 1.0) / scale - 1.0
 
     def forward(self, x, pos, H, W):
         """

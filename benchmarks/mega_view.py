@@ -8,8 +8,8 @@ import cv2
 import argparse
 import matplotlib.pyplot as plt
 import matplotlib
-from RDD.RDD import build
-from RDD.RDD_helper import RDD_helper
+from src.RDD import build
+from src.RDD_helper import RDD_helper
 import os
 from benchmarks.utils import pose_auc, angle_error_vec, angle_error_mat, symmetric_epipolar_distance, compute_symmetrical_epipolar_errors, compute_pose_error, compute_relative_pose, estimate_pose, dynamic_alpha
 
@@ -114,13 +114,14 @@ class MegaDepthPoseMNNBenchmark:
         ]
         self.data_root = data_root
 
-    def benchmark(self, model_helper, model_name = None, scale_intrinsics = False, calibrated = True, plot_every_iter=1, plot=False, method='sparse'):
+    def benchmark(self, model_helper, model_name = None, scale_intrinsics = False, calibrated = True, plot_every_iter=1, plot=False, method='sparse', pose_estimator='opencv'):
         with torch.no_grad():
             data_root = self.data_root
             tot_e_t, tot_e_R, tot_e_pose = [], [], []
             thresholds = [5, 10, 20]
             for scene_ind in range(len(self.scenes)):
                 scene_name = os.path.splitext(self.scene_names[scene_ind])[0]
+                print(f"Processing {scene_name}")
                 scene = self.scenes[scene_ind]
                 indices = scene['indices']
                 idx = 0
@@ -128,10 +129,11 @@ class MegaDepthPoseMNNBenchmark:
                 for pair in tqdm.tqdm(indices):
                     
                     pairs = pair['pair_names']
-                    K0 = pair['intrisinic'][0].copy().astype(np.float32)
+
+                    K0 = pair['intrinsic'][0].copy().astype(np.float32)
                     T0 = pair['pose'][0].copy().astype(np.float32)
                     R0, t0 = T0[:3, :3], T0[:3, 3]
-                    K1 = pair['intrisinic'][1].copy().astype(np.float32)    
+                    K1 = pair['intrinsic'][1].copy().astype(np.float32)    
                     T1 = pair['pose'][1].copy().astype(np.float32)
                     R1, t1 = T1[:3, :3], T1[:3, 3]
                     R, t = compute_relative_pose(R0, t0, R1, t1)
@@ -149,7 +151,7 @@ class MegaDepthPoseMNNBenchmark:
                     elif method == 'sparse':
                         kpts0, kpts1, conf = model_helper.match(im_A, im_B, thr=0.01,  resize=1600)
                     else:
-                        raise ValueError(f"Invalid method {method}")
+                        kpts0, kpts1, conf = model_helper.match_3rd_party(im_A, im_B, thr=0.01, resize=1600, model=method)
             
                     im_A = Image.open(im_A_path)
                     w0, h0 = im_A.size
@@ -175,6 +177,7 @@ class MegaDepthPoseMNNBenchmark:
                             K1,
                             norm_threshold,
                             conf=0.99999,
+                            estimator=pose_estimator,
                         )
                     if ret is not None:
                         R_est, t_est, mask = ret
@@ -185,13 +188,13 @@ class MegaDepthPoseMNNBenchmark:
                         epi_errs = compute_symmetrical_epipolar_errors(T0_to_1, kpts0, kpts1, K0, K1)
                         if scene_ind % plot_every_iter == 0 and plot:
 
-                            if not os.path.exists(f'outputs/mega_view/{model_name}_{method}'):
-                                os.mkdir(f'outputs/mega_view/{model_name}_{method}')
-                            name = f'outputs/mega_view/{model_name}_{method}/{scene_name}_{idx}.png'
+                            if not os.path.exists(f'outputs/mega_view/{model_name}_{method}_{pose_estimator}'):
+                                os.makedirs(f'outputs/mega_view/{model_name}_{method}_{pose_estimator}')
+                            name = f'outputs/mega_view/{model_name}_{method}_{pose_estimator}/{scene_name}_{idx}.png'
                             _make_evaluation_figure(im_A, im_B, kpts0, kpts1, epi_errs, e_t, e_R, path=name)
                         e_pose = max(e_t, e_R)
                     else:
-                        e_t, e_R = np.inf, np.inf  # or any large sentinel value to indicate failure
+                        e_t, e_R = np.inf, np.inf
                         e_pose = max(e_t, e_R)
                     tot_e_t.append(e_t)
                     tot_e_R.append(e_R)
@@ -224,29 +227,34 @@ def parse_arguments():
     
     parser.add_argument("--data_root", type=str, default="./data/megadepth_view", help="Path to the MegaDepth dataset.")
 
-    parser.add_argument("--weights", type=str, default="./weights/RDD-v2.pth", help="Path to the model checkpoint.")
+    parser.add_argument("--weights", type=str, default="./weights/rdd.pth", help="Path to the model checkpoint.")
 
     parser.add_argument("--plot", action="store_true", help="Whether to plot the results.")
 
     parser.add_argument("--method", type=str, default="sparse", help="Method for matching.")
+
+    parser.add_argument("--pose_estimator", type=str, default="opencv", choices=["opencv", "poselib"], help="Pose estimator backend.")
+
+    parser.add_argument("--config", type=str, default=None, help="Path to the config file for the model")
     
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_arguments()    
     if not os.path.exists('outputs'):
-        os.mkdir('outputs')
+        os.makedirs('outputs')
     
     if not os.path.exists(f'outputs/mega_view'):
-        os.mkdir(f'outputs/mega_view')
-    model = build(weights=args.weights)
+        os.makedirs(f'outputs/mega_view')
+    
+    model = build(config=args.config, weights=args.weights)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
     benchmark = MegaDepthPoseMNNBenchmark(data_root=args.data_root)
     model.eval()
     model_helper = RDD_helper(model)
     with torch.no_grad():
         method = args.method
-        out = benchmark.benchmark(model_helper, model_name='RDD', plot_every_iter=1, plot=args.plot, method=method)
-        with open(f'outputs/mega_view/RDD_{method}.txt', 'w') as f:
+        out = benchmark.benchmark(model_helper, model_name='RDD', plot_every_iter=1, plot=args.plot, method=method, pose_estimator=args.pose_estimator)
+        with open(f'outputs/mega_view/RDD_{method}_{args.pose_estimator}.txt', 'w') as f:
             f.write(str(out))
-
-
