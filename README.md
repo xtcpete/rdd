@@ -110,8 +110,7 @@ output = RDD_model.extract(torch.randn(1, 3, 480, 640))
 
 ### Evaluation
 
-Please note that due to different GPU architectures and the stochastic nature of RANSAC, you may observe slightly different results; however, they should be very close to those reported in the paper. To reproduce the numbers in the paper, use the v1 weights instead.
-
+Please note that due to different GPU architectures and the stochastic nature of RANSAC, you may observe slightly different results;
 Results can be visualized by passing `--plot`. The CVPR-version model can be evaluated by passing `--config` with the corresponding weights.
 
 **MegaDepth-1500**
