@@ -1,246 +1,261 @@
+"""Utility helpers used by the training pipeline."""
+
+from __future__ import annotations
+from kornia.geometry.epipolar import numeric
 import torch
+from kornia.geometry.conversions import convert_points_to_homogeneous
 import numpy as np
-import pdb
-from copy import deepcopy
+from collections import OrderedDict
 import cv2
-debug_cnt = -1
-from RDD.matchers import DualSoftmaxMatcher
 
-matcher = DualSoftmaxMatcher(inv_temperature = 1)
+def relative_pose_error(T_0to1, R, t, ignore_gt_t_thr=0.0):
+    # angle error between 2 vectors
+    t_gt = T_0to1[:3, 3]
+    n = np.linalg.norm(t) * np.linalg.norm(t_gt)
+    t_err = np.rad2deg(np.arccos(np.clip(np.dot(t, t_gt) / n, -1.0, 1.0)))
+    t_err = np.minimum(t_err, 180 - t_err)  # handle E ambiguity
+    if np.linalg.norm(t_gt) < ignore_gt_t_thr:  # pure rotation is challenging
+        t_err = 0
 
-def make_batch(augmentor, difficulty = 0.3, train = True):
-    Hs = []
-    img_list = augmentor.train if train else augmentor.test
-    dev = augmentor.device
-    batch_images = []
+    # angle error between 2 rotation matrices
+    R_gt = T_0to1[:3, :3]
+    cos = (np.trace(np.dot(R.T, R_gt)) - 1) / 2
+    cos = np.clip(cos, -1., 1.)  # handle numercial errors
+    R_err = np.rad2deg(np.abs(np.arccos(cos)))
 
-    with torch.no_grad(): # we dont require grads in the augmentation
-        for b in range(augmentor.batch_size):
-            rdidx = np.random.randint(len(img_list))
-            img = torch.tensor(img_list[rdidx], dtype=torch.float32).permute(2,0,1).to(augmentor.device).unsqueeze(0)
-            batch_images.append(img)
+    return t_err, R_err
 
-        batch_images = torch.cat(batch_images)
-
-        p1, H1 = augmentor(batch_images, difficulty)
-        p2, H2 = augmentor(batch_images, difficulty, TPS = True, prob_deformation = 0.7)
-
-    return p1, p2, H1, H2
-
-def plot_corrs(p1, p2, src_pts, tgt_pts):
-    import matplotlib.pyplot as plt
-    p1 = p1.cpu()
-    p2 = p2.cpu()
-    src_pts = src_pts.cpu() ; tgt_pts = tgt_pts.cpu()
-    rnd_idx = np.random.randint(len(src_pts), size=200)
-    src_pts = src_pts[rnd_idx, ...]
-    tgt_pts = tgt_pts[rnd_idx, ...]
-
-    #Plot ground-truth correspondences
-    fig, ax = plt.subplots(1,2,figsize=(18, 12))
-    colors = np.random.uniform(size=(len(tgt_pts),3))
-    #Src image
-    img = p1
-    for i, p in enumerate(src_pts):
-        ax[0].scatter(p[0],p[1],color=colors[i])
-    ax[0].imshow(img.permute(1,2,0).numpy()[...,::-1])
-
-    #Target img
-    img2 = p2
-    for i, p in enumerate(tgt_pts):
-        ax[1].scatter(p[0],p[1],color=colors[i])
-    ax[1].imshow(img2.permute(1,2,0).numpy()[...,::-1])
-    plt.show()
-
-
-def get_corresponding_pts(p1, p2, H, H2, augmentor, h, w, crop = None):
-    '''
-        Get dense corresponding points
-    '''
-    global debug_cnt
-    negatives, positives = [], []
+def check_accuracy(embeddings0: torch.Tensor, embeddings1: torch.Tensor) -> float:
+    """Return the top-1 matching accuracy between two embedding sets."""
+    if embeddings0.shape[0] == 0:
+        return 0.0
 
     with torch.no_grad():
-        #real input res of samples
-        rh, rw = p1.shape[-2:]
-        ratio = torch.tensor([rw/w, rh/h], device = p1.device)
+        similarity = embeddings0 @ embeddings1.t()
+        nearest_idx = similarity.argmax(dim=1)
+        correct = (nearest_idx == torch.arange(len(embeddings0), device=embeddings0.device)).sum()
+    return float(correct) / float(len(embeddings0))
 
-        (H, mask1) = H
-        (H2, src, W, A, mask2) = H2
+def symmetric_epipolar_distance(pts0, pts1, E, K0, K1):
+    """Squared symmetric epipolar distance.
+    This can be seen as a biased estimation of the reprojection error.
+    Args:
+        pts0 (torch.Tensor): [N, 2]
+        E (torch.Tensor): [3, 3]
+    """
+    pts0 = (pts0 - K0[[0, 1], [2, 2]][None]) / K0[[0, 1], [0, 1]][None]
+    pts1 = (pts1 - K1[[0, 1], [2, 2]][None]) / K1[[0, 1], [0, 1]][None]
+    pts0 = convert_points_to_homogeneous(pts0)
+    pts1 = convert_points_to_homogeneous(pts1)
 
-        #Generate meshgrid of target pts
-        x, y = torch.meshgrid(torch.arange(w, device=p1.device), torch.arange(h, device=p1.device), indexing ='xy')
-        mesh = torch.cat([x.unsqueeze(-1), y.unsqueeze(-1)], dim=-1)
-        target_pts = mesh.view(-1, 2) * ratio
+    Ep0 = pts0 @ E.T  # [N, 3]
+    p1Ep0 = torch.sum(pts1 * Ep0, -1)  # [N,]
+    Etp1 = pts1 @ E  # [N, 3]
+    d = p1Ep0**2 * (1.0 / (Ep0[:, 0]**2 + Ep0[:, 1]**2) + 1.0 / (Etp1[:, 0]**2 + Etp1[:, 1]**2))  # N
+    return d
 
-        #Pack all transformations into T
-        for batch_idx in range(len(p1)):
-            with torch.no_grad():
-                T = (H[batch_idx], H2[batch_idx], 
-                    src[batch_idx].unsqueeze(0), W[batch_idx].unsqueeze(0), A[batch_idx].unsqueeze(0))
-                #We now warp the target points to src image
-                src_pts = (augmentor.get_correspondences(target_pts, T) ) #target to src 
-                tgt_pts = (target_pts)
-            
-                #Check out of bounds points
-                mask_valid = (src_pts[:, 0] >=0) & (src_pts[:, 1] >=0) & \
-                            (src_pts[:, 0] < rw) & (src_pts[:, 1] < rh)
+def compute_symmetrical_epipolar_errors(data):
+    """ 
+    Update:
+        data (dict):{"epi_errs": [M]}
+    """
+    warp_params = data['warp01_params']
+    Tx = numeric.cross_product_matrix(warp_params['pose01'][:, :3, 3])
+    E_mat = Tx @ warp_params['pose01'][:, :3, :3]
 
-                negatives.append( tgt_pts[~mask_valid] )            
-                tgt_pts = tgt_pts[mask_valid]
-                src_pts = src_pts[mask_valid]
+    m_bids = data['m_bids']
+    pts0 = data['mkpts0']
+    pts1 = data['mkpts1']
+    intrinsics0 = warp_params['intrinsics0']
+    intrinsics1 = warp_params['intrinsics1']
 
+    bbox0 = warp_params.get('bbox0', None)
+    bbox1 = warp_params.get('bbox1', None)
+    if bbox0 is not None and bbox1 is not None:
+        bbox0_xy = bbox0[:, [1, 0]].to(device=pts0.device, dtype=pts0.dtype)
+        bbox1_xy = bbox1[:, [1, 0]].to(device=pts1.device, dtype=pts1.dtype)
+    else:
+        bbox0_xy = bbox1_xy = None
 
-                #Remove invalid pixels
-                mask_valid =    mask1[batch_idx, src_pts[:,1].long(), src_pts[:,0].long()]  & \
-                                mask2[batch_idx, tgt_pts[:,1].long(), tgt_pts[:,0].long()]
-                tgt_pts = tgt_pts[mask_valid]
-                src_pts = src_pts[mask_valid]
+    epi_errs = []
+    for bs in range(Tx.size(0)):
+        mask = m_bids == bs
+        if not torch.any(mask):
+            continue
+        pts0_bs = pts0[mask]
+        pts1_bs = pts1[mask]
+        K0_bs = intrinsics0[bs]
+        K1_bs = intrinsics1[bs]
 
-                # limit nb of matches if desired
-                if crop is not None:
-                    rnd_idx = torch.randperm(len(src_pts), device=src_pts.device)[:crop]
-                    src_pts = src_pts[rnd_idx]
-                    tgt_pts = tgt_pts[rnd_idx]
+        if bbox0_xy is not None:
+            offset0 = bbox0_xy[bs]
+            offset1 = bbox1_xy[bs]
+            pts0_bs = pts0_bs + offset0
+            pts1_bs = pts1_bs + offset1
 
-                if debug_cnt >=0 and debug_cnt < 4:
-                    plot_corrs(p1[batch_idx], p2[batch_idx], src_pts , tgt_pts )
-                    debug_cnt +=1
+        epi_errs.append(
+            symmetric_epipolar_distance(pts0_bs, pts1_bs, E_mat[bs], K0_bs, K1_bs))
+    if epi_errs:
+        epi_errs = torch.cat(epi_errs, dim=0)
+    else:
+        epi_errs = torch.empty(0, device=pts0.device, dtype=pts0.dtype)
 
-                src_pts = (src_pts / ratio)
-                tgt_pts = (tgt_pts / ratio)
+    data.update({'epi_errs': epi_errs})
 
-                #Check out of bounds points
-                padto = 10 if crop is not None else 2
-                mask_valid1 = (src_pts[:, 0] >= (0 + padto)) & (src_pts[:, 1] >= (0 + padto)) & \
-                             (src_pts[:, 0] < (w - padto)) & (src_pts[:, 1] < (h - padto))
-                mask_valid2 = (tgt_pts[:, 0] >= (0 + padto)) & (tgt_pts[:, 1] >= (0 + padto)) & \
-                             (tgt_pts[:, 0] < (w - padto)) & (tgt_pts[:, 1] < (h - padto))
-                mask_valid = mask_valid1 & mask_valid2
-                tgt_pts = tgt_pts[mask_valid]
-                src_pts = src_pts[mask_valid]         
+def epidist_prec(errors, thresholds, ret_dict=False):
+    precs = []
+    for thr in thresholds:
+        prec_ = []
+        for errs in errors:
+            correct_mask = errs < thr
+            prec_.append(np.mean(correct_mask) if len(correct_mask) > 0 else 0)
+        precs.append(np.mean(prec_) if len(prec_) > 0 else 0)
+    if ret_dict:
+        return {f'prec@{t:.0e}': prec for t, prec in zip(thresholds, precs)}
+    else:
+        return precs
 
-                #Remove repeated correspondences
-                lut_mat = torch.ones((h, w, 4), device = src_pts.device, dtype = src_pts.dtype) * -1
-                # src_pts_np = src_pts.cpu().numpy()
-                # tgt_pts_np = tgt_pts.cpu().numpy()
-                try:
-                    lut_mat[src_pts[:,1].long(), src_pts[:,0].long()] = torch.cat([src_pts, tgt_pts], dim=1)
-                    mask_valid = torch.all(lut_mat >= 0, dim=-1)
-                    points = lut_mat[mask_valid]
-                    positives.append(points)
-                except:
-                    pdb.set_trace()
-                    print('..')
+def error_auc(errors, thresholds):
+    """
+    Args:
+        errors (list): [N,]
+        thresholds (list)
+    """
+    errors = [0] + sorted(list(errors))
+    recall = list(np.linspace(0, 1, len(errors)))
 
-    return negatives, positives
+    aucs = []
+    thresholds = [5, 10, 20]
+    for thr in thresholds:
+        last_index = np.searchsorted(errors, thr)
+        y = recall[:last_index] + [recall[last_index-1]]
+        x = errors[:last_index] + [thr]
+        aucs.append(np.trapz(y, x) / thr)
 
+    return {f'auc@{t}': auc for t, auc in zip(thresholds, aucs)}
 
-def crop_patches(tensor, coords, size = 7):
-    '''
-        Crop [size x size] patches around 2D coordinates from a tensor.
-    '''
-    B, C, H, W = tensor.shape
+def aggregate_metrics(metrics, epi_err_thr=1e-4, EVAL_TIMES=1):
+    """ Aggregate metrics for the whole dataset:
+    (This method should be called once per dataset)
+    1. AUC of the pose error (angular) at the threshold [5, 10, 20]
+    2. Mean matching precision at the threshold 5e-4(ScanNet), 1e-4(MegaDepth)
+    """
+    # filter duplicates
+    unq_ids = OrderedDict((iden, id) for id, iden in enumerate(metrics['identifiers']))
+    unq_ids = list(unq_ids.values())
 
-    x, y = coords[:, 0], coords[:, 1]
-    y = y.view(-1, 1, 1)
-    x = x.view(-1, 1, 1)
-    halfsize = size // 2
-    # Create meshgrid for indexing
-    x_offset, y_offset = torch.meshgrid(torch.arange(-halfsize, halfsize+1), torch.arange(-halfsize, halfsize+1), indexing='xy')
-    y_offset = y_offset.to(tensor.device)
-    x_offset = x_offset.to(tensor.device)
+    # pose auc
+    angular_thresholds = [5, 10, 20]
 
-    # Compute indices around each coordinate
-    y_indices = (y + y_offset.view(1, size, size)).squeeze(0) + halfsize
-    x_indices = (x + x_offset.view(1, size, size)).squeeze(0) + halfsize
+    if EVAL_TIMES >= 1:
+        pose_errors = np.max(np.stack([metrics['R_errs'], metrics['t_errs']]), axis=0).reshape(-1, EVAL_TIMES)[unq_ids].reshape(-1)
+    else:
+        pose_errors = np.max(np.stack([metrics['R_errs'], metrics['t_errs']]), axis=0)[unq_ids]
+    aucs = error_auc(pose_errors, angular_thresholds)  # (auc@5, auc@10, auc@20)
 
-    # Handle out-of-boundary indices with padding
-    tensor_padded = torch.nn.functional.pad(tensor, (halfsize, halfsize, halfsize, halfsize), mode='constant')
-
-    # Index tensor to get patches
-    patches = tensor_padded[:, :, y_indices, x_indices] # [B, C, N, H, W]
-    return patches
-
-def subpix_softmax2d(heatmaps, temp = 0.25):
-    N, H, W = heatmaps.shape
-    heatmaps = torch.softmax(temp * heatmaps.view(-1, H*W), -1).view(-1, H, W)
-    x, y = torch.meshgrid(torch.arange(W, device =  heatmaps.device ), torch.arange(H, device =  heatmaps.device ), indexing = 'xy')
-    x = x - (W//2)
-    y = y - (H//2)
-    #pdb.set_trace()
-    coords_x = (x[None, ...] * heatmaps)
-    coords_y = (y[None, ...] * heatmaps)
-    coords = torch.cat([coords_x[..., None], coords_y[..., None]], -1).view(N, H*W, 2)
-    coords = coords.sum(1)
-
-    return coords
-
-
-def check_accuracy(X, Y, pts1 = None, pts2 = None):
-    with torch.no_grad():
-        #dist_mat = torch.cdist(X,Y)
-        dist_mat = X @ Y.t()
-        nn = torch.argmax(dist_mat, dim=1)
-        #nn = torch.argmin(dist_mat, dim=1)
-        correct = nn == torch.arange(len(X), device = X.device)
-
-        acc = correct.sum().item() / len(X)
-        return acc
-
-def get_nb_trainable_params(model):
-	model_parameters = filter(lambda p: p.requires_grad, model.parameters())
-	nb_params = sum([np.prod(p.size()) for p in model_parameters])
- 
-	print('Number of trainable parameters: {:d}'.format(nb_params))
- 
- 
-def plot_keypoints(image, kpts, radius=2, color=(255, 0, 0)):
-    image = image.cpu().detach().numpy() if isinstance(image, torch.Tensor) else image
-    kpts = kpts.cpu().detach().numpy() if isinstance(kpts, torch.Tensor) else kpts
-
-    if image.dtype is not np.dtype('uint8'):
-        image = image * 255
-        image = image.astype(np.uint8)
-
-    if len(image.shape) == 2 or image.shape[2] == 1:
-        image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
-
-    out = np.ascontiguousarray(deepcopy(image))
-    kpts = np.round(kpts).astype(int)
-
-    for kpt in kpts:
-        y0, x0 = kpt
-        cv2.drawMarker(out, (x0, y0), color, cv2.MARKER_CROSS, radius)
-
-        # cv2.circle(out, (x0, y0), radius, color, -1, lineType=cv2.LINE_4)
-    return out
-
-def save_image_in_actual_size(image, name):
-    import matplotlib.pyplot as plt
-
-    dpi = 100
-    height, width = image.shape[:2]
-
-    # What size does the figure need to be in inches to fit the image?
-    figsize = width / float(dpi), height / float(dpi)
-
-    # Create a figure of the right size with one axes that takes up the full figure
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_axes([0, 0, 1, 1])
-
-    # Hide spines, ticks, etc.
-    ax.axis('off')
-
-    # Display the image.
-    if len(image.shape) == 3:
-        ax.imshow(image, cmap='gray')
-    elif len(image.shape) == 2:
-        if image.dtype == np.uint8:
-            ax.imshow(image, cmap='gray')
-        else:
-            ax.imshow(image)
-            ax.text(20, 20, f"Range: {image.min():g}~{image.max():g}", color='red')
+    # matching precision
+    dist_thresholds = [epi_err_thr]
+    precs = epidist_prec(np.array(metrics['epi_errs'], dtype=object)[unq_ids], dist_thresholds, True)  # (prec@err_thr)
     
-    # save the image
-    plt.savefig(name, dpi=dpi)
+    u_num_matches = np.array(metrics['num_matches'], dtype=object)[unq_ids]
+    num_matches = {f'num_matches': u_num_matches.mean() }
+    return {**aucs, **precs, **num_matches}
+
+def estimate_pose(kpts0, kpts1, K0, K1, thresh, conf=0.99999):
+    if len(kpts0) < 5:
+        return None
+    # normalize keypoints
+    kpts0 = (kpts0 - K0[[0, 1], [2, 2]][None]) / K0[[0, 1], [0, 1]][None]
+    kpts1 = (kpts1 - K1[[0, 1], [2, 2]][None]) / K1[[0, 1], [0, 1]][None]
+
+    # normalize ransac threshold
+    ransac_thr = thresh / np.mean([K0[0, 0], K1[1, 1], K0[0, 0], K1[1, 1]])
+
+    # compute pose with cv2
+    E, mask = cv2.findEssentialMat(
+        kpts0, kpts1, np.eye(3), threshold=ransac_thr, prob=conf, method=cv2.RANSAC)
+    if E is None:
+        print("\nE is None while trying to recover pose.\n")
+        return None
+
+    # recover pose from E
+    best_num_inliers = 0
+    ret = None
+    for _E in np.split(E, len(E) / 3):
+        n, R, t, _ = cv2.recoverPose(_E, kpts0, kpts1, np.eye(3), 1e9, mask=mask)
+        if n > best_num_inliers:
+            ret = (R, t[:, 0], mask.ravel() > 0)
+            best_num_inliers = n
+
+    return ret
+
+def compute_pose_errors(data):
+    """ 
+    Update:
+        data (dict):{
+            "R_errs" List[float]: [N]
+            "t_errs" List[float]: [N]
+            "inliers" List[np.ndarray]: [N]
+        }
+    """
+    pixel_thr = 0.5
+    conf = 0.99999
+    RANSAC = "RANSAC"
+    EVAL_TIMES = 1
+    data.update({'R_errs': [], 't_errs': [], 'inliers': []})
+
+    m_bids = data['m_bids'].cpu().numpy()
+    pts0 = data['mkpts0'].cpu().numpy()
+    pts1 = data['mkpts1'].cpu().numpy()
+    K0 = data['warp01_params']['intrinsics0'].cpu().numpy()
+    K1 = data['warp01_params']['intrinsics1'].cpu().numpy()
+    bbox0 = data['warp01_params'].get('bbox0', None)
+    bbox1 = data['warp01_params'].get('bbox1', None)
+    if bbox0 is not None and bbox1 is not None:
+        bbox0_np = bbox0.cpu().numpy()
+        bbox1_np = bbox1.cpu().numpy()
+        bbox0_xy = np.stack([bbox0_np[:, 1], bbox0_np[:, 0]], axis=1)
+        bbox1_xy = np.stack([bbox1_np[:, 1], bbox1_np[:, 0]], axis=1)
+    else:
+        bbox0_xy = bbox1_xy = None
+    T_0to1 = data['warp01_params']['pose01'].cpu().numpy()
+
+    for bs in range(K0.shape[0]):
+        mask = m_bids == bs
+        if EVAL_TIMES >= 1:
+            bpts0, bpts1 = pts0[mask], pts1[mask]
+            K0_bs = K0[bs]
+            K1_bs = K1[bs]
+            if bbox0_xy is not None:
+                offset0 = bbox0_xy[bs]
+                offset1 = bbox1_xy[bs]
+                bpts0 = bpts0 + offset0
+                bpts1 = bpts1 + offset1
+            R_list, T_list, inliers_list = [], [], []
+            # for _ in range(config.MODEL.EVAL_TIMES):
+            for _ in range(5):
+                shuffling = np.random.permutation(np.arange(len(bpts0)))
+                if _ >= EVAL_TIMES:
+                    continue
+                bpts0 = bpts0[shuffling]
+                bpts1 = bpts1[shuffling]
+                
+                if RANSAC == 'RANSAC':
+                    ret = estimate_pose(bpts0, bpts1, K0_bs, K1_bs, pixel_thr, conf=conf)
+                    if ret is None:
+                        R_list.append(np.inf)
+                        T_list.append(np.inf)
+                        inliers_list.append(np.array([]).astype(bool))
+                    else:
+                        R, t, inliers = ret
+                        t_err, R_err = relative_pose_error(T_0to1[bs], R, t, ignore_gt_t_thr=0.0)
+                        R_list.append(R_err)
+                        T_list.append(t_err)
+                        inliers_list.append(inliers)
+
+                else:
+                    raise ValueError(f"Unknown RANSAC method: {RANSAC}")
+
+            data['R_errs'].append(R_list)
+            data['t_errs'].append(T_list)
+            data['inliers'].append(inliers_list[0])

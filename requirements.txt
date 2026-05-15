@@ -4,6 +4,13 @@ poselib
 tqdm
 kornia
 matplotlib
+yacs
+numba
 pyyaml
+tensorboard
 h5py
 git+https://github.com/cvg/Hierarchical-Localization.git
+pytorch-lightning>=2.1
+timm
+jsmin
+shortuuid

@@ -4,6 +4,7 @@ import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
 import kornia
+import time
 
 class RDD_helper(nn.Module):
     def __init__(self, RDD):
@@ -14,7 +15,7 @@ class RDD_helper(nn.Module):
         self.lg_matcher = None
         
     @torch.inference_mode()
-    def match(self, img0, img1, thr=0.01, resize=None, top_k=4096):
+    def match(self, img0, img1, thr=0.01, resize=None, top_k=4096, return_timing=False):
         if top_k is not None and top_k != self.RDD.top_k:
             self.RDD.top_k = top_k
             self.RDD.set_softdetect(top_k=top_k)
@@ -22,11 +23,15 @@ class RDD_helper(nn.Module):
         img0, scale0 = self.parse_input(img0, resize)
         img1, scale1 = self.parse_input(img1, resize)
 
+        detect_start = time.perf_counter()
         out0 = self.RDD.extract(img0)[0]
         out1 = self.RDD.extract(img1)[0]
+        detect_time = time.perf_counter() - detect_start
         
         # get top_k confident matches
+        match_start = time.perf_counter()
         mkpts0, mkpts1, conf = self.matcher(out0, out1, thr)
+        match_time = time.perf_counter() - match_start
         
         scale0 = 1.0 / scale0
         scale1 = 1.0 / scale1
@@ -34,7 +39,15 @@ class RDD_helper(nn.Module):
         mkpts0 = mkpts0 * scale0
         mkpts1 = mkpts1 * scale1
         
-        return mkpts0.cpu().numpy(), mkpts1.cpu().numpy(), conf.cpu().numpy()
+        outputs = (mkpts0.cpu().numpy(), mkpts1.cpu().numpy(), conf.cpu().numpy())
+        if return_timing:
+            timing = {
+                "detect": detect_time,
+                "match": match_time,
+                "total": detect_time + match_time,
+            }
+            return outputs + (timing,)
+        return outputs
     
     @torch.inference_mode()
     def match_lg(self, img0, img1, thr=0.01, resize=None, top_k=4096):
@@ -51,7 +64,7 @@ class RDD_helper(nn.Module):
                 "filter_threshold": 0.01,  # match threshold
                 "depth_confidence": -1,  # depth confidence threshold
                 "width_confidence": -1,  # width confidence threshold
-                "weights": './weights/RDD_lg-v2.pth',  # path to the weights
+                "weights": './weights/rdd_lg.pth',  # path to the weights
             }
             self.lg_matcher = LightGlue('rdd', **lg_conf).to(self.RDD.device)
 
@@ -109,16 +122,20 @@ class RDD_helper(nn.Module):
         return mkpts0.cpu().numpy(), mkpts1.cpu().numpy(), conf.cpu().numpy()
     
     @torch.inference_mode()
-    def match_dense(self, img0, img1, thr=0.01, resize=None, anchor='mnn'):
+    def match_dense(self, img0, img1, thr=0.01, resize=None, anchor='mnn', return_timing=False):
         
         img0, scale0 = self.parse_input(img0, resize=resize)
         img1, scale1 = self.parse_input(img1, resize=resize)
 
+        detect_start = time.perf_counter()
         out0 = self.RDD.extract_dense(img0)[0]
         out1 = self.RDD.extract_dense(img1)[0]
+        detect_time = time.perf_counter() - detect_start
         
         # get top_k confident matches
+        match_start = time.perf_counter()
         mkpts0, mkpts1, conf = self.dense_matcher(out0, out1, thr, err_thr=self.RDD.stride, anchor=anchor)
+        match_time = time.perf_counter() - match_start
         
         scale0 = 1.0 / scale0
         scale1 = 1.0 / scale1
@@ -126,7 +143,15 @@ class RDD_helper(nn.Module):
         mkpts0 = mkpts0 * scale0
         mkpts1 = mkpts1 * scale1
         
-        return mkpts0.cpu().numpy(), mkpts1.cpu().numpy(), conf.cpu().numpy()
+        outputs = (mkpts0.cpu().numpy(), mkpts1.cpu().numpy(), conf.cpu().numpy())
+        if return_timing:
+            timing = {
+                "detect": detect_time,
+                "match": match_time,
+                "total": detect_time + match_time,
+            }
+            return outputs + (timing,)
+        return outputs
         
     @torch.inference_mode()
     def match_3rd_party(self, img0, img1, model='aliked', resize=None, thr=0.01):

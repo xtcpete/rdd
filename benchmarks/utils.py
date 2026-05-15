@@ -4,6 +4,7 @@ from kornia.geometry.epipolar import numeric
 from kornia.geometry.conversions import convert_points_to_homogeneous
 import cv2
 import bisect
+
 def pose_auc(errors, thresholds):
     sort_idx = np.argsort(errors)
     errors = np.array(errors.copy())[sort_idx]
@@ -75,9 +76,48 @@ def compute_relative_pose(R1, t1, R2, t2):
     trans = -rots @ t1 + t2
     return rots, trans
 
-def estimate_pose(kpts0, kpts1, K0, K1, norm_thresh, conf=0.99999):
+def _camera_from_K(K):
+    return {
+        "model": "PINHOLE",
+        "width": 0,
+        "height": 0,
+        "params": [float(K[0, 0]), float(K[1, 1]), float(K[0, 2]), float(K[1, 2])],
+    }
+
+def _pose_lib_pixel_thresh(norm_thresh, K0, K1):
+    return norm_thresh * (np.mean(np.abs(K0[:2, :2])) + np.mean(np.abs(K1[:2, :2])))
+
+def estimate_pose(kpts0, kpts1, K0, K1, norm_thresh, conf=0.99999, estimator="opencv"):
     if len(kpts0) < 5:
         return None
+    if estimator == "poselib":
+        try:
+            import poselib
+        except ImportError as exc:
+            raise ImportError(
+                "PoseLib pose estimation was requested, but the 'poselib' package is not installed. "
+                "Install it from https://github.com/PoseLib/PoseLib or with 'pip install poselib'."
+            ) from exc
+
+        pose, info = poselib.estimate_relative_pose(
+            kpts0.astype(np.float64),
+            kpts1.astype(np.float64),
+            _camera_from_K(K0),
+            _camera_from_K(K1),
+            {
+                "max_epipolar_error": _pose_lib_pixel_thresh(norm_thresh, K0, K1),
+                "success_prob": conf,
+            },
+            {},
+        )
+        inliers = np.asarray(info.get("inliers", []), dtype=bool)
+        if pose is None or inliers.size == 0 or not np.any(inliers):
+            return None
+        return np.asarray(pose.R), np.asarray(pose.t).reshape(3, 1), inliers
+
+    if estimator != "opencv":
+        raise ValueError(f"Unknown pose estimator: {estimator}")
+
     K0inv = np.linalg.inv(K0[:2,:2])
     K1inv = np.linalg.inv(K1[:2,:2])
 

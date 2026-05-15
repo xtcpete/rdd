@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torchvision.models import resnet
 from typing import Optional, Callable
 from ..utils.misc import NestedTensor
+import torchvision.transforms as T
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels,
@@ -81,6 +82,12 @@ class ResBlock(nn.Module):
 class RDD_detector(nn.Module):
     def __init__(self, block_dims, hidden_dim=128):
         super().__init__()
+        self.input_transform = T.Compose([
+            T.Normalize(
+                mean=(0.430, 0.411, 0.296),
+                std=(0.213, 0.156, 0.143)
+            )
+        ])
         self.gate = nn.ReLU(inplace=False)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.pool4 = nn.MaxPool2d(kernel_size=4, stride=4)
@@ -114,7 +121,8 @@ class RDD_detector(nn.Module):
         )
 
     def forward(self, samples: NestedTensor):
-        x1 = self.block1(samples.tensors)
+        x = self.input_transform(samples.tensors)
+        x1 = self.block1(x)
         x2 = self.pool2(x1)
         x2 = self.block2(x2)  # B x c2 x H/2 x W/2
         x3 = self.pool4(x2)
@@ -135,7 +143,39 @@ class RDD_detector(nn.Module):
         scoremap = self.convhead2(x1234)
         
         return scoremap
+
+
+class SharedDescriptorDetector(nn.Module):
+    uses_descriptor_features = True
+
+    def __init__(self, input_dim: int, upsample_dims: list[int]):
+        super().__init__()
+        blocks = []
+        in_dim = input_dim
+        for hidden_dim in upsample_dims:
+            blocks.append(nn.Sequential(
+                resnet.conv3x3(in_dim, hidden_dim),
+                nn.BatchNorm2d(hidden_dim),
+                nn.ReLU(inplace=False),
+            ))
+            in_dim = hidden_dim
+        self.blocks = nn.ModuleList(blocks)
+        self.score_head = nn.Conv2d(in_dim, 1, kernel_size=1)
+
+    def forward(self, descriptor_map: torch.Tensor, output_size: tuple[int, int]) -> torch.Tensor:
+        x = descriptor_map
+        for block in self.blocks:
+            x = block(x)
+            x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
+        x = self.score_head(x)
+        x = F.interpolate(x, size=output_size, mode='bilinear', align_corners=False)
+        return torch.sigmoid(x)
     
 def build_detector(config):
+    detector_type = config.get('type', 'legacy')
+    if detector_type == 'shared_descriptor':
+        return SharedDescriptorDetector(config['input_dim'], config['upsample_dims'])
+    if detector_type != 'legacy':
+        raise ValueError(f"Unsupported detector type '{detector_type}'.")
     block_dims = config['block_dims']
     return RDD_detector(block_dims, block_dims[-1])

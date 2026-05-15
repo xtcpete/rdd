@@ -5,7 +5,7 @@ from torch import nn
 import cv2
 import numpy as np
 from copy import deepcopy
-from RDD.dataset.megadepth.utils import warp
+from src.dataset.utils import warp
 
 def plot_keypoints(image, kpts, radius=2, color=(255, 0, 0)):
     image = image.cpu().detach().numpy() if isinstance(image, torch.Tensor) else image
@@ -148,6 +148,98 @@ def local_similarity(descriptor_map, descriptors, kpts_wh, radius):
     return local_sim_sort_mean
 
 
+def _accumulate_row_logsumexp(row_max, row_exp_sum, logits):
+    chunk_max = logits.max(dim=1).values
+    merged_max = torch.maximum(row_max, chunk_max)
+    row_exp_sum = row_exp_sum * torch.exp(row_max - merged_max) + torch.exp(logits - merged_max[:, None]).sum(dim=1)
+    return merged_max, row_exp_sum
+
+
+def compute_repeatability(
+    descriptors,
+    descriptor_map,
+    sample_coords_wh,
+    *,
+    pmf_temperature,
+    logit_scale=20.0,
+    chunk_size=8192,
+    eps=1e-6,
+):
+    """Exact dual-softmax repeatability sampled at each query's warped location.
+
+    This matches the original:
+      similarity = (Q @ D^T) * scale
+      similarity = softmax(similarity, dim=-2) * softmax(similarity, dim=-1)
+      pmf = exp((clamp(similarity) - 1) / temperature)
+      repeatability = bilinear_sample(pmf_i, warped_coord_i)
+
+    but avoids materializing the full [N_queries x H x W] similarity tensor.
+    """
+    if descriptors.numel() == 0:
+        return descriptor_map.new_zeros((0,), dtype=torch.float32)
+
+    _, h, w = descriptor_map.shape
+    num_pixels = h * w
+    chunk_size = max(1, min(int(chunk_size), num_pixels))
+
+    with torch.no_grad(), torch.autocast(device_type=descriptors.device.type, enabled=False):
+        queries = descriptors.detach().float()
+        dense = descriptor_map.detach().float().reshape(descriptor_map.shape[0], num_pixels)
+        coords = sample_coords_wh.detach().float()
+
+        row_max = queries.new_full((queries.shape[0],), -torch.inf)
+        row_exp_sum = queries.new_zeros((queries.shape[0],))
+        col_lse = queries.new_empty((num_pixels,))
+
+        for start in range(0, num_pixels, chunk_size):
+            end = min(start + chunk_size, num_pixels)
+            logits = (queries @ dense[:, start:end]) * logit_scale
+            row_max, row_exp_sum = _accumulate_row_logsumexp(row_max, row_exp_sum, logits)
+            col_lse[start:end] = torch.logsumexp(logits, dim=0)
+
+        row_lse = row_max + row_exp_sum.log()
+
+        x = coords[:, 0]
+        y = coords[:, 1]
+        x0 = torch.floor(x).long()
+        y0 = torch.floor(y).long()
+        x1 = x0 + 1
+        y1 = y0 + 1
+
+        x0f = x0.float()
+        y0f = y0.float()
+        x1f = x1.float()
+        y1f = y1.float()
+
+        weights = torch.stack([
+            (x1f - x) * (y1f - y),
+            (x1f - x) * (y - y0f),
+            (x - x0f) * (y1f - y),
+            (x - x0f) * (y - y0f),
+        ], dim=1)
+
+        neighbor_x = torch.stack([x0, x0, x1, x1], dim=1)
+        neighbor_y = torch.stack([y0, y1, y0, y1], dim=1)
+        valid = (
+            (neighbor_x >= 0)
+            & (neighbor_x < w)
+            & (neighbor_y >= 0)
+            & (neighbor_y < h)
+        )
+        weights = weights * valid.float()
+
+        flat_idx = (neighbor_y.clamp(0, h - 1) * w + neighbor_x.clamp(0, w - 1)).reshape(-1)
+        neighbor_desc = dense[:, flat_idx].t().reshape(queries.shape[0], 4, queries.shape[1])
+        neighbor_logits = (neighbor_desc * queries[:, None, :]).sum(dim=-1) * logit_scale
+        neighbor_col_lse = col_lse[flat_idx].reshape(queries.shape[0], 4)
+
+        dual_soft = torch.exp(2 * neighbor_logits - row_lse[:, None] - neighbor_col_lse)
+        dual_soft = dual_soft.clamp_(eps, 1 - eps)
+        pmf = torch.exp((dual_soft - 1) / pmf_temperature)
+
+        return (pmf * weights).sum(dim=1)
+
+
 class ScoreMapRepLoss(object):
     """ Scoremap repetability"""
 
@@ -181,20 +273,8 @@ class ScoreMapRepLoss(object):
             s1 = scores_kpts10 * correspondences[idx]['scores1']  # repeatability
 
             # ===================== repetability
-            similarity_map_01 = correspondences[idx]['similarity_map_01_valid']
-            similarity_map_10 = correspondences[idx]['similarity_map_10_valid']
-
-            pmf01 = ((similarity_map_01.detach() - 1) / self.temperature).exp()
-            pmf10 = ((similarity_map_10.detach() - 1) / self.temperature).exp()
-            kpts01 = kpts01.detach()
-            kpts10 = kpts10.detach()
-
-            pmf01_kpts = torch.nn.functional.grid_sample(pmf01.unsqueeze(0), kpts01.view(1, 1, -1, 2),
-                                                         mode='bilinear', align_corners=True)[0, :, 0, :]
-            pmf10_kpts = torch.nn.functional.grid_sample(pmf10.unsqueeze(0), kpts10.view(1, 1, -1, 2),
-                                                         mode='bilinear', align_corners=True)[0, :, 0, :]
-            repetability01 = torch.diag(pmf01_kpts)
-            repetability10 = torch.diag(pmf10_kpts)
+            repeatability01 = correspondences[idx]['repeatability01']
+            repeatability10 = correspondences[idx]['repeatability10']
             
             # ===================== reliability
             # ids0, ids1 = correspondences[idx]['ids0'], correspondences[idx]['ids1']
@@ -211,8 +291,8 @@ class ScoreMapRepLoss(object):
             # reliability0 = 1 - ((ls0 - 1) / self.temperature).exp()
             # reliability1 = 1 - ((ls1 - 1) / self.temperature).exp()
 
-            fs0 = repetability01  # * reliability0
-            fs1 = repetability10  # * reliability1
+            fs0 = repeatability01  # * reliability0
+            fs1 = repeatability10  # * reliability1
 
             if s0.sum() != 0:
                 loss01 = (1 - fs0) * s0 * len(s0) / s0.sum()
@@ -274,7 +354,18 @@ def mutual_argmax(value, mask=None, as_tuple=True):
 def mutual_argmin(value, mask=None):
     return mutual_argmax(-value, mask)
 
-def compute_correspondence(model, pred0, pred1, batch, radius = 2, rand=True, train_gt_th = 5, debug=False):
+def compute_correspondence(
+    model,
+    pred0,
+    pred1,
+    batch,
+    radius=2,
+    rand=True,
+    train_gt_th=5,
+    score_map_temperature=0.1,
+    similarity_chunk_size=8192,
+    debug=False,
+):
     b, c, h, w = pred0['scores_map'].shape
     wh = pred0['scores_map'][0].new_tensor([[w - 1, h - 1]])
     
@@ -282,8 +373,6 @@ def compute_correspondence(model, pred0, pred1, batch, radius = 2, rand=True, tr
     pred1_with_rand = pred1
     pred0_with_rand['scores'] = []
     pred1_with_rand['scores'] = []
-    pred0_with_rand['descriptors'] = []
-    pred1_with_rand['descriptors'] = []
     pred0_with_rand['num_det'] = []
     pred1_with_rand['num_det'] = []
 
@@ -381,20 +470,6 @@ def compute_correspondence(model, pred0, pred1, batch, radius = 2, rand=True, tr
         pred0_with_rand['scores'].append(scores_kpts0)
         pred1_with_rand['scores'].append(scores_kpts1)
         
-        descriptor_map0, descriptor_map1 = pred0['descriptor_map'][idx], pred1['descriptor_map'][idx]
-        descriptor_map0 = F.normalize(descriptor_map0, dim=0)
-        descriptor_map1 = F.normalize(descriptor_map1, dim=0)
-
-        desc0 = torch.nn.functional.grid_sample(descriptor_map0.unsqueeze(0), kpts0.view(1, 1, -1, 2),
-                                                mode='bilinear', align_corners=True)[0, :, 0, :].t()
-        desc1 = torch.nn.functional.grid_sample(descriptor_map1.unsqueeze(0), kpts1.view(1, 1, -1, 2),
-                                                mode='bilinear', align_corners=True)[0, :, 0, :].t()
-        desc0 = F.normalize(desc0, dim=-1)
-        desc1 = F.normalize(desc1, dim=-1)
-
-        pred0_with_rand['descriptors'].append(desc0)
-        pred1_with_rand['descriptors'].append(desc1)
-        
         # =========================== prepare warp parameters
         warp01_params = {}
         for k, v in batch['warp01_params'].items():
@@ -459,19 +534,40 @@ def compute_correspondence(model, pred0, pred1, batch, radius = 2, rand=True, tr
 
         dist_l1 = (dist01_l1 + dist10_l1.t()) / 2.
 
-        # =========================== compute cross image descriptor similarity_map
-        similarity_map_01 = (desc0 @ descriptor_map1.reshape(h*w, 256).t()) * 20
-        similarity_map_01 = similarity_map_01.softmax(dim = -2) * similarity_map_01.softmax(dim= -1)
-        similarity_map_01 = similarity_map_01.reshape(desc0.shape[0], h, w)
-        similarity_map_01 = torch.clamp(similarity_map_01, 1e-6, 1-1e-6)
-        
-        similarity_map_10 = (desc1 @ descriptor_map0.reshape(h*w, 256).t()) * 20
-        similarity_map_10 = similarity_map_10.softmax(dim = -2) * similarity_map_10.softmax(dim= -1)
-        similarity_map_10 = similarity_map_10.reshape(desc1.shape[0], h, w)
-        similarity_map_10 = torch.clamp(similarity_map_10, 1e-6, 1-1e-6)
+        descriptor_map0 = F.normalize(pred0['descriptor_map'][idx].detach(), dim=0)
+        descriptor_map1 = F.normalize(pred1['descriptor_map'][idx].detach(), dim=0)
 
-        similarity_map_01_valid = similarity_map_01[ids0]  # valid descriptors
-        similarity_map_10_valid = similarity_map_10[ids1]
+        valid_kpts0 = kpts0[ids0].detach()
+        valid_kpts1 = kpts1[ids1].detach()
+        desc0_valid = torch.nn.functional.grid_sample(
+            descriptor_map0.unsqueeze(0),
+            valid_kpts0.view(1, 1, -1, 2),
+            mode='bilinear',
+            align_corners=True,
+        )[0, :, 0, :].t()
+        desc1_valid = torch.nn.functional.grid_sample(
+            descriptor_map1.unsqueeze(0),
+            valid_kpts1.view(1, 1, -1, 2),
+            mode='bilinear',
+            align_corners=True,
+        )[0, :, 0, :].t()
+        desc0_valid = F.normalize(desc0_valid, dim=-1)
+        desc1_valid = F.normalize(desc1_valid, dim=-1)
+
+        repeatability01 = compute_repeatability(
+            desc0_valid,
+            descriptor_map1,
+            kpts01_wh,
+            pmf_temperature=score_map_temperature,
+            chunk_size=similarity_chunk_size,
+        )
+        repeatability10 = compute_repeatability(
+            desc1_valid,
+            descriptor_map0,
+            kpts10_wh,
+            pmf_temperature=score_map_temperature,
+            chunk_size=similarity_chunk_size,
+        )
 
         kpts01 = 2 * kpts01_wh.detach() / wh - 1  # N0x2, (x,y), [-1,1]
         kpts10 = 2 * kpts10_wh.detach() / wh - 1  # N0x2, (x,y), [-1,1]
@@ -486,10 +582,8 @@ def compute_correspondence(model, pred0, pred1, batch, radius = 2, rand=True, tr
                                 'ids0_d': ids0_d, 'ids1_d': ids1_d,  # match indices of valid kpts0 and kpts1
                                 'dist_l1': dist_l1,  # cross distance matrix of valid kpts using L1 norm
                                 'dist': dist_l2,  # cross distance matrix of valid kpts using L2 norm
-                                'similarity_map_01': similarity_map_01,  # all
-                                'similarity_map_10': similarity_map_10,  # all
-                                'similarity_map_01_valid': similarity_map_01_valid,  # valid
-                                'similarity_map_10_valid': similarity_map_10_valid,  # valid
+                                'repeatability01': repeatability01,
+                                'repeatability10': repeatability10,
                                 })
 
     return correspondences, pred0_with_rand, pred1_with_rand

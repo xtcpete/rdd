@@ -17,13 +17,13 @@ from tqdm import tqdm
 from hloc import logger
 from hloc.utils.parsers import names_to_pair, names_to_pair_old, parse_retrieval
 
-from RDD.matchers import LightGlue
+from src.matchers import LightGlue
 
-class Matcher(nn.Module):
+class LGMatcher(nn.Module):
     default_conf = {
         "features": "rdd",
-        "depth_confidence": 0.95,
-        "width_confidence": 0.99,
+        "depth_confidence": -1,
+        "width_confidence": -1,
     }
     
     required_inputs = [
@@ -37,7 +37,8 @@ class Matcher(nn.Module):
     
     def __init__(self, conf):
         super().__init__()
-        self.net = LightGlue(conf.pop("features"), **conf)
+        print(f"Initializing LightGlue with config: {pprint.pformat(conf)}")
+        self.net = LightGlue(conf.copy().pop("features"))
     
     def forward(self, data):
         """Check the data and call the _forward method of the child model."""
@@ -55,6 +56,129 @@ class Matcher(nn.Module):
                 "image1": {k[:-1]: v for k, v in data.items() if k[-1] == "1"},
             }
         )
+    
+class MNN(nn.Module):
+    default_conf = {
+        "features": "rdd",
+        "threshold": -1,
+    }
+    
+    required_inputs = [
+        "image0",
+        "keypoints0",
+        "descriptors0",
+        "image1",
+        "keypoints1",
+        "descriptors1",
+    ]
+    
+    def __init__(self, conf):
+        super().__init__()
+        # thresholds and temperature similar to DualSoftmaxMatcher defaults
+        self.threshold = (
+            conf.get("threshold", self.default_conf["threshold"]) if isinstance(conf, dict) else self.default_conf["threshold"]
+        )
+        self.inv_temperature = (
+            conf.get("inv_temperature", 20) if isinstance(conf, dict) else 20
+        )
+    
+    def forward(self, data):
+        """Check the data and call the _forward method of the child model."""
+        for key in self.required_inputs:
+            assert key in data, "Missing key {} in data".format(key)
+        return self._forward(data)
+    
+    def dual_softmax(self, desc0: torch.Tensor, desc1: torch.Tensor, thr: float | None = None):
+        """Dual-softmax mutual nearest matching.
+        Inputs: desc0 [B,M,D], desc1 [B,N,D]. Returns indices (b,i,j) and P [B,M,N].
+        """
+        if thr is None:
+            thr = self.threshold
+        sim = torch.matmul(desc0, desc1.transpose(-1, -2)) * self.inv_temperature  # [B,M,N]
+        P = sim.softmax(dim=-2) * sim.softmax(dim=-1)
+        # mutual nearest with threshold
+        row_max = P.max(dim=-1, keepdim=True).values
+        col_max = P.max(dim=-2, keepdim=True).values
+        mutual = (P == row_max) & (P == col_max) & (P >= thr)
+        inds = torch.nonzero(mutual, as_tuple=False)  # [K,3]
+        return inds, P
+
+    def _forward(self, data):
+        def _prep_desc(desc: torch.Tensor, kpts: torch.Tensor) -> torch.Tensor:
+            """Ensure descriptors follow the [B, N, D] layout expected by the matcher."""
+            if desc.ndim != 3:
+                raise ValueError("Descriptors are expected to be 3D tensors.")
+            # Descriptors can be saved either as [B, D, N] (hloc convention) or already
+            # as [B, N, D]. Only transpose when needed so that the keypoint dimension
+            # always lines up with the descriptor dimension we iterate over below.
+            if desc.shape[-2] != kpts.shape[-2] and desc.shape[-1] == kpts.shape[-2]:
+                desc = desc.transpose(-1, -2)
+            return desc.contiguous()
+
+        kpts0 = data["keypoints0"]
+        kpts1 = data["keypoints1"]
+        desc0 = _prep_desc(data["descriptors0"], kpts0)
+        desc1 = _prep_desc(data["descriptors1"], kpts1)
+        B, M, D = desc0.shape
+        _, N, _ = desc1.shape
+
+        inds, P = self.dual_softmax(desc0, desc1, thr=self.threshold)
+
+        # initialize outputs similar to LightGlue
+        matches0_list, matches1_list = [], []
+        scores0_list, scores1_list = [], []
+        matches_pairs, scores_list = [], []
+
+        if inds.numel() == 0:
+            for b in range(B):
+                matches0_list.append(torch.full((M,), -1, dtype=torch.int64, device=P.device))
+                matches1_list.append(torch.full((N,), -1, dtype=torch.int64, device=P.device))
+                scores0_list.append(torch.zeros((M,), dtype=P.dtype, device=P.device))
+                scores1_list.append(torch.zeros((N,), dtype=P.dtype, device=P.device))
+                matches_pairs.append(torch.empty((0, 2), dtype=torch.long, device=P.device))
+                scores_list.append(torch.empty((0,), dtype=P.dtype, device=P.device))
+        else:
+            for b in range(B):
+                sel = inds[:, 0] == b
+                ij = inds[sel][:, 1:]  # [K,2]
+                m0 = torch.full((M,), -1, dtype=torch.int64, device=P.device)
+                m1 = torch.full((N,), -1, dtype=torch.int64, device=P.device)
+                s0 = torch.zeros((M,), dtype=P.dtype, device=P.device)
+                s1 = torch.zeros((N,), dtype=P.dtype, device=P.device)
+                if ij.numel() > 0:
+                    i_idx = ij[:, 0]
+                    j_idx = ij[:, 1]
+                    conf = P[b, i_idx, j_idx]
+                    m0[i_idx] = j_idx
+                    m1[j_idx] = i_idx
+                    s0[i_idx] = conf
+                    s1[j_idx] = conf
+                    matches_pairs.append(torch.stack([i_idx, j_idx], dim=-1))
+                    scores_list.append(conf)
+                else:
+                    matches_pairs.append(torch.empty((0, 2), dtype=torch.long, device=P.device))
+                    scores_list.append(torch.empty((0,), dtype=P.dtype, device=P.device))
+                matches0_list.append(m0)
+                matches1_list.append(m1)
+                scores0_list.append(s0)
+                scores1_list.append(s1)
+
+        matches0 = torch.stack(matches0_list, dim=0)
+        matches1 = torch.stack(matches1_list, dim=0)
+        matching_scores0 = torch.stack(scores0_list, dim=0)
+        matching_scores1 = torch.stack(scores1_list, dim=0)
+
+        # produce output dict compatible with LightGlue writer_fn
+        return {
+            "matches0": matches0,
+            "matches1": matches1,
+            "matching_scores0": matching_scores0,
+            "matching_scores1": matching_scores1,
+            "matches": matches_pairs,
+            "scores": scores_list
+        }
+        
+
         
 
 """
@@ -68,6 +192,21 @@ confs = {
         "output": "matches-rdd-lightglue",
         "model": {
             "name": "lightglue",
+            "features": "rdd",
+        },
+    },
+    "rdd+mast3r":{
+        "output": "matches-rdd-mast3r",
+        "model": {
+            "name": "mast3r",
+            "features": "rdd",
+            "device": "cuda",
+        },
+    },
+    "rdd+mnn":{
+        "output": "matches-rdd-mnn",
+        "model": {
+            "name": "mnn",
             "features": "rdd",
         },
     }
@@ -113,12 +252,14 @@ class FeaturePairsDataset(torch.utils.data.Dataset):
             for k, v in grp.items():
                 data[k + "0"] = torch.from_numpy(v.__array__()).float()
             # some matchers might expect an image but only use its size
-            data["image0"] = torch.empty((1,) + tuple(grp["image_size"])[::-1])
+            if 'image0' not in data:
+                data["image0"] = torch.empty((1,) + tuple(grp["image_size"])[::-1])
         with h5py.File(self.feature_path_r, "r") as fd:
             grp = fd[name1]
             for k, v in grp.items():
                 data[k + "1"] = torch.from_numpy(v.__array__()).float()
-            data["image1"] = torch.empty((1,) + tuple(grp["image_size"])[::-1])
+            if 'image1' not in data:
+                data["image1"] = torch.empty((1,) + tuple(grp["image_size"])[::-1])
         return data
 
     def __len__(self):
@@ -221,8 +362,13 @@ def match_from_paths(
     if len(pairs) == 0:
         logger.info("Skipping the matching.")
         return
-
-    model = Matcher(conf["model"])
+    
+    if conf["model"]["name"] == "lightglue":
+        model = LGMatcher(conf["model"])
+    elif conf["model"]["name"] == "mnn":
+        model = MNN(conf["model"])
+    else:
+        raise ValueError(f"Unknown matcher name: {conf['model']['name']}")
     model.eval()
     model.to(device)
 
