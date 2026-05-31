@@ -115,13 +115,6 @@ class RDD(nn.Module):
             from third_party import extract_aliked_kpts
             img = x
             mkpts, scores = extract_aliked_kpts(img, self.device)
-        elif model == 'alike':
-            from third_party import extract_alike_kpts
-            img = x[0].permute(1,2,0).expand(-1,-1,3).cpu().numpy() * 255
-            kpts, scores = extract_alike_kpts(img, self.device)
-            mkpts = kpts[None]
-            scores = scores[None]
-
         else:
             raise ValueError('Unknown model')
     
