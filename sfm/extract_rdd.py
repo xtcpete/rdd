@@ -29,7 +29,7 @@ confs = {
         "output": "feats-rdd-n4096",
         "model": {
             'config_path': './configs/default.yaml',
-            'weights': './weights/rdd_full.pth',
+            'weights': './weights/rdd.pth',
             'max_keypoints': 4096,
         },
         "preprocessing": {
